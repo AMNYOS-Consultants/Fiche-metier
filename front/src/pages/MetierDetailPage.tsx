@@ -37,7 +37,7 @@ import type { MetierTransversale, MetierCondition } from '@/types/api';
 export function MetierDetailPage() {
   const { code = '' } = useParams();
   const [exportEnCours, setExportEnCours] = useState(false);
-  const [modeleExport, setModeleExport] = useState<'standard' | 'ocapiat'>('standard');
+  const [modeleExport, setModeleExport] = useState<'standard' | 'ocapiat' | 'ocapiat-client'>('standard');
   const [dcMin, setDcMin] = useState(1);
   const [heuresMax, setHeuresMax] = useState(2000);
   const [degreMin, setDegreMin] = useState(0.1);
@@ -135,9 +135,10 @@ export function MetierDetailPage() {
       // Import dynamique : `docx` (~600 ko) ne doit peser que sur les visiteurs qui exportent.
       // Seule la sélection déjà filtrée (`resultatsProches`) part dans le document : les
       // contrôles de filtre eux-mêmes n'existent que dans la page, jamais dans l'export.
-      if (modeleExport === 'ocapiat') {
-        const { exporterFicheMetierOcapiat } = await import('@/utils/exportWord');
-        await exporterFicheMetierOcapiat({
+      if (modeleExport === 'ocapiat' || modeleExport === 'ocapiat-client') {
+        const { exporterFicheMetierOcapiat, exporterFicheMetierOcapiatClient } = await import('@/utils/exportWord');
+        const exporter = modeleExport === 'ocapiat' ? exporterFicheMetierOcapiat : exporterFicheMetierOcapiatClient;
+        await exporter({
           metier: metier.donnees,
           couples: activites.donnees?.data ?? [],
           connaissances: connaissances.donnees?.data ?? [],
@@ -377,13 +378,14 @@ export function MetierDetailPage() {
                 <select
                   className="select-modele-export"
                   value={modeleExport}
-                  onChange={(e) => setModeleExport(e.target.value as 'standard' | 'ocapiat')}
+                  onChange={(e) => setModeleExport(e.target.value as 'standard' | 'ocapiat' | 'ocapiat-client')}
                   disabled={exportEnCours}
                   aria-label="Modèle d’export Word"
                   title="Modèle OCAPIAT — voir docs/EXEMPLE FICHE METIER.docx"
                 >
                   <option value="standard">Modèle standard</option>
                   <option value="ocapiat">Modèle OCAPIAT</option>
+                  <option value="ocapiat-client">Modèle OCAPIAT Client</option>
                 </select>
                 <button
                   type="button"
@@ -398,6 +400,17 @@ export function MetierDetailPage() {
           </div>
         </div>
         {m.famille && <p className="fiche__famille">{libelleFamille(m.famille)}</p>}
+        {((m.dossierSource?.libelle ?? m.dossierAutre) || m.interfaceAmontAval || m.redacteur) && (
+          <ul className="badges">
+            {(m.dossierSource?.libelle ?? m.dossierAutre) && (
+              <li className="badge badge--dossier">{m.dossierSource?.libelle ?? m.dossierAutre}</li>
+            )}
+            {m.interfaceAmontAval && (
+              <li className="badge badge--dossier">Interface amont/aval : {m.interfaceAmontAval}</li>
+            )}
+            {m.redacteur && <li className="badge badge--dossier">Rédacteur : {m.redacteur}</li>}
+          </ul>
+        )}
         {erreurEnregistrement && <ErrorMessage message={erreurEnregistrement} />}
 
         {/* `metier_proximite` est matérialisée : elle reste sur les anciennes valeurs tant

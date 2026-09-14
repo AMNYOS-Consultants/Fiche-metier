@@ -1,4 +1,4 @@
-import { apiGet, apiPut } from './client';
+import { apiGet, apiPost, apiPut, apiDelete } from './client';
 import type {
   Activite,
   Formacode,
@@ -40,6 +40,21 @@ export function listerFormacodes(filtres: FiltresFormacodes, signal?: AbortSigna
 
 export function obtenirFormacode(code: string, signal?: AbortSignal) {
   return apiGet<Formacode>(`/formacodes/${encodeURIComponent(code)}`, undefined, signal);
+}
+
+export interface NouveauFormacode {
+  codeFormacode: string;
+  intitule: string;
+  codeNsf: string | null;
+  estFondamental: boolean;
+}
+
+export function creerFormacode(donnees: NouveauFormacode, signal?: AbortSignal) {
+  return apiPost<Formacode>('/formacodes', donnees, signal);
+}
+
+export function supprimerFormacode(code: string, signal?: AbortSignal) {
+  return apiDelete(`/formacodes/${encodeURIComponent(code)}`, signal);
 }
 
 // ---------- Édition des niveaux d'un formacode ----------

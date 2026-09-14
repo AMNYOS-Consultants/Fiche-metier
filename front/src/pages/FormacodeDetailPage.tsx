@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { obtenirFormacode, modifierFormacodeNiveaux } from '@/api/activites';
+import { Link, useParams, useNavigate } from 'react-router-dom';
+import { obtenirFormacode, modifierFormacodeNiveaux, supprimerFormacode } from '@/api/activites';
 import type { LigneNiveauFormacode } from '@/api/activites';
 import { ApiError } from '@/api/client';
 import { useFetch } from '@/hooks/useFetch';
@@ -54,6 +54,7 @@ function versNombreOuNull(valeur: string): number | null {
 
 export function FormacodeDetailPage() {
   const { code = '' } = useParams();
+  const navigate = useNavigate();
   const [recharger, setRecharger] = useState(0);
   const { donnees, chargement, erreur } = useFetch(
     (signal) => obtenirFormacode(code, signal),
@@ -65,6 +66,8 @@ export function FormacodeDetailPage() {
   const [ligneSelectionneeCle, setLigneSelectionneeCle] = useState<string | null>(null);
   const [enregistrement, setEnregistrement] = useState(false);
   const [erreurEdition, setErreurEdition] = useState<string | null>(null);
+  const [suppressionEnCours, setSuppressionEnCours] = useState(false);
+  const [erreurSuppression, setErreurSuppression] = useState<string | null>(null);
   const compteurCles = useRef(0);
 
   if (chargement) return <Loader />;
@@ -150,11 +153,46 @@ export function FormacodeDetailPage() {
     }
   }
 
+  async function supprimer() {
+    if (!window.confirm(`Supprimer définitivement le formacode ${f.codeFormacode} ?`)) return;
+
+    setSuppressionEnCours(true);
+    setErreurSuppression(null);
+    try {
+      await supprimerFormacode(code);
+      navigate('/formacodes');
+    } catch (err) {
+      setErreurSuppression(err instanceof ApiError ? err.message : 'Suppression impossible');
+    } finally {
+      setSuppressionEnCours(false);
+    }
+  }
+
   return (
     <article className="page fiche">
       <header className="fiche__entete">
-        <span className="carte__code">{f.codeFormacode}</span>
-        <h1>{f.intitule}</h1>
+        <div className="fiche__entete-ligne">
+          <div>
+            <span className="carte__code">{f.codeFormacode}</span>
+            <h1>{f.intitule}</h1>
+          </div>
+          {!modeEdition && (
+            <button
+              type="button"
+              className="bouton--retirer-ligne"
+              onClick={supprimer}
+              disabled={suppressionEnCours || metiers.length > 0}
+              title={
+                metiers.length > 0
+                  ? `Utilisé par ${metiers.length} métier(s) : retirez d’abord ce domaine de connaissance de leurs couples`
+                  : undefined
+              }
+            >
+              {suppressionEnCours ? 'Suppression…' : 'Supprimer'}
+            </button>
+          )}
+        </div>
+        {erreurSuppression && <ErrorMessage message={erreurSuppression} />}
         {f.nsf && (
           <p className="fiche__famille">
             NSF {f.nsf.codeNsf}

@@ -34,6 +34,69 @@ export async function listerFormacodes(req: Request, res: Response): Promise<voi
   res.json(construireReponsePaginee(rows, count, pagination));
 }
 
+const schemaCreationFormacode = z.object({
+  codeFormacode: z.string().trim().min(1).max(10),
+  intitule: z.string().trim().min(1).max(255),
+  codeNsf: z.string().trim().max(10).nullable(),
+  estFondamental: z.boolean().default(false),
+});
+
+/**
+ * POST /api/formacodes — crée un formacode absent des trois classeurs importés (voir
+ * docs/FORMACODE BASE.zip : certains codes cités par les fiches n'existent dans aucun des
+ * deux référentiels bruts). Aucun niveau/durée n'est créé ici : c'est l'objet de
+ * PUT /formacodes/:code/niveaux, une fois le code créé.
+ */
+export async function creerFormacode(req: Request, res: Response): Promise<void> {
+  const donnees = schemaCreationFormacode.parse(req.body);
+
+  const existant = await Formacode.findByPk(donnees.codeFormacode, { attributes: ['codeFormacode'] });
+  if (existant) throw HttpError.badRequest(`Le formacode ${donnees.codeFormacode} existe déjà`);
+
+  if (donnees.codeNsf) {
+    const nsf = await Nsf.findByPk(donnees.codeNsf, { attributes: ['codeNsf'] });
+    if (!nsf) throw HttpError.badRequest(`NSF inconnu : ${donnees.codeNsf}`);
+  }
+
+  const formacode = await Formacode.create({
+    codeFormacode: donnees.codeFormacode,
+    intitule: donnees.intitule,
+    codeNsf: donnees.codeNsf,
+    estFondamental: donnees.estFondamental,
+  });
+
+  res.status(201).json(formacode);
+}
+
+/**
+ * DELETE /api/formacodes/:code — refusé si un couple s'appuie encore dessus : la clé
+ * étrangère `activite_connaissance.code_formacode` est en CASCADE, une suppression silencieuse
+ * effacerait ce domaine de connaissance de toutes les fiches qui le portent. Pour un code
+ * erroné déjà utilisé, `back/src/database/importers/correctionsFormacodes.ts` re-pointe les
+ * références vers le bon code avant de le supprimer — c'est la voie à suivre, pas ce endpoint.
+ */
+export async function supprimerFormacode(
+  req: Request<{ code: string }>,
+  res: Response,
+): Promise<void> {
+  const codeFormacode = req.params.code;
+  const formacode = await Formacode.findByPk(codeFormacode, { attributes: ['codeFormacode'] });
+  if (!formacode) throw HttpError.notFound(`Formacode ${codeFormacode}`);
+
+  const [{ nbCouples }] = await sequelize.query<{ nbCouples: number }>(
+    `SELECT COUNT(*) AS nbCouples FROM activite_connaissance WHERE code_formacode = :codeFormacode`,
+    { replacements: { codeFormacode }, type: QueryTypes.SELECT },
+  );
+  if (nbCouples > 0) {
+    throw HttpError.badRequest(
+      `${codeFormacode} est utilisé par ${nbCouples} couple(s) activité-compétence : impossible de le supprimer sans d’abord retirer ces domaines de connaissance des fiches concernées.`,
+    );
+  }
+
+  await formacode.destroy();
+  res.status(204).send();
+}
+
 /** GET /api/formacodes/:code — formacode, ses durées par niveau et les métiers qui le portent. */
 export async function obtenirFormacode(
   req: Request<{ code: string }>,

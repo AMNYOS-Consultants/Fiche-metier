@@ -4,6 +4,7 @@ import { libelleFamille } from '@/utils/format';
 
 export function MetierCard({ metier }: { metier: Metier }) {
   const appellations = metier.appellations ?? [];
+  const dossier = metier.dossierSource?.libelle ?? metier.dossierAutre;
 
   return (
     <article className="carte">
@@ -13,6 +14,12 @@ export function MetierCard({ metier }: { metier: Metier }) {
         </Link>
         <span className="carte__code">{metier.codeMetier}</span>
       </header>
+
+      {dossier && (
+        <ul className="badges">
+          <li className="badge badge--dossier">{dossier}</li>
+        </ul>
+      )}
 
       {metier.famille && <p className="carte__famille">{libelleFamille(metier.famille)}</p>}
 

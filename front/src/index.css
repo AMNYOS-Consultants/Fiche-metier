@@ -217,6 +217,14 @@ h2 {
   border-radius: 999px;
 }
 
+/* Dossier source : une étiquette de catégorisation, pas un contenu de la fiche — un ton
+   neutre la distingue des badges d'appellations qui suivent. */
+.badge--dossier {
+  background: var(--couleur-fond);
+  color: var(--couleur-texte-doux);
+  border: 1px solid var(--couleur-bordure);
+}
+
 .liste {
   margin: 0;
   padding-left: 1.25rem;
@@ -961,6 +969,16 @@ h2 {
   margin-bottom: 1rem;
   padding-bottom: 1rem;
   border-bottom: 1px solid var(--couleur-bordure);
+}
+
+.formacode-creation .passerelles-parametres {
+  margin-bottom: 1rem;
+}
+
+.avertissement-champ {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #8a6a1f;
 }
 
 .passerelles-champ {

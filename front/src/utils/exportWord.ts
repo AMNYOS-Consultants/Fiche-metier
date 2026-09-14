@@ -748,11 +748,22 @@ function ocaBoite(...enfants: Paragraph[]): Table {
 
 function ocaCellule(
   texte: string,
-  opts: { gras?: boolean; centre?: boolean; colSpan?: number; rowSpan?: number; couleur?: string } = {},
+  opts: {
+    gras?: boolean;
+    centre?: boolean;
+    colSpan?: number;
+    rowSpan?: number;
+    couleur?: string;
+    /** Largeur en % de la table — sans ça Word répartit les colonnes à parts égales, ce qui
+     * écrase les cellules de contenu quand une colonne voisine ne porte qu'un code court
+     * (MOT_CLE_ACT_n, formacode, niveau…). */
+    largeur?: number;
+  } = {},
 ): TableCell {
   return new TableCell({
     columnSpan: opts.colSpan,
     rowSpan: opts.rowSpan,
+    width: opts.largeur !== undefined ? { size: opts.largeur, type: WidthType.PERCENTAGE } : undefined,
     verticalAlign: VerticalAlign.CENTER,
     margins: { top: 100, bottom: 100, left: 140, right: 140 },
     children: [
@@ -910,21 +921,23 @@ function ocaTableauDomaines(domaines: ConnaissanceMetier[]): Table {
   return ocaTableau([
     new TableRow({
       children: [
-        ocaCellule('NSF', { gras: true, centre: true, rowSpan: 2 }),
-        ocaCellule('Forma-code', { gras: true, centre: true, rowSpan: 2 }),
-        ocaCellule('Domaine de connaissances mobilisé', { gras: true, rowSpan: 2 }),
-        ocaCellule('Niveau d’approfondissement', { gras: true, centre: true, colSpan: 4 }),
+        ocaCellule('NSF', { gras: true, centre: true, rowSpan: 2, largeur: 8 }),
+        ocaCellule('Forma-code', { gras: true, centre: true, rowSpan: 2, largeur: 10 }),
+        ocaCellule('Domaine de connaissances mobilisé', { gras: true, rowSpan: 2, largeur: 42 }),
+        ocaCellule('Niveau d’approfondissement', { gras: true, centre: true, colSpan: 4, largeur: 40 }),
       ],
     }),
-    new TableRow({ children: [1, 2, 3, 4].map((n) => ocaCellule(String(n), { gras: true, centre: true })) }),
+    new TableRow({
+      children: [1, 2, 3, 4].map((n) => ocaCellule(String(n), { gras: true, centre: true, largeur: 10 })),
+    }),
     ...domaines.map(
       (d) =>
         new TableRow({
           children: [
-            ocaCellule(d.codeNsf ?? '—', { centre: true }),
-            ocaCellule(d.codeFormacode, { centre: true }),
-            ocaCellule(d.intitule),
-            ...[1, 2, 3, 4].map((n) => ocaCellule(d.niveau === n ? 'X' : '', { centre: true })),
+            ocaCellule(d.codeNsf ?? '—', { centre: true, largeur: 8 }),
+            ocaCellule(d.codeFormacode, { centre: true, largeur: 10 }),
+            ocaCellule(d.intitule, { largeur: 42 }),
+            ...[1, 2, 3, 4].map((n) => ocaCellule(d.niveau === n ? 'X' : '', { centre: true, largeur: 10 })),
           ],
         }),
     ),
@@ -937,8 +950,8 @@ function ocaTableauRessourcesTransverses(transversales: MetierTransversale[]): T
     new TableRow({
       children: [
         ocaCellule('Ressources transverses', { gras: true }),
-        ocaCellule('Niveau', { gras: true, centre: true }),
         ocaCellule('Niveau d’approfondissement', { gras: true }),
+        ocaCellule('Niveau', { gras: true, centre: true }),
       ],
     }),
     ...triees.map((t) => {
@@ -950,8 +963,8 @@ function ocaTableauRessourcesTransverses(transversales: MetierTransversale[]): T
       return new TableRow({
         children: [
           ocaCellule(t.competence?.libelle ?? t.codeTransversale),
-          ocaCellule(t.nonConcerne || t.niveau === null ? '/' : String(t.niveau), { centre: true }),
           ocaCellule(texte),
+          ocaCellule(t.nonConcerne || t.niveau === null ? '/' : String(t.niveau), { centre: true }),
         ],
       });
     }),
@@ -977,20 +990,29 @@ function ocaTableauChainage(couples: Couple[], connaissances: ConnaissanceMetier
   return ocaTableau([
     new TableRow({
       children: [
-        ocaCellule('Code couple activité-compétence', { gras: true, centre: true, couleur: OCA_ROUGE_FONCE }),
-        ocaCellule('Formacode', { gras: true, centre: true, couleur: OCA_ROUGE_FONCE }),
-        ocaCellule('Intitulé du Formacode', { gras: true, couleur: OCA_ROUGE_FONCE }),
-        ocaCellule('Niveau approfondissement', { gras: true, centre: true, couleur: OCA_ROUGE_FONCE }),
+        ocaCellule('Code couple activité-compétence', {
+          gras: true,
+          centre: true,
+          couleur: OCA_ROUGE_FONCE,
+          largeur: 20,
+        }),
+        ocaCellule('Formacode', { gras: true, centre: true, couleur: OCA_ROUGE_FONCE, largeur: 12 }),
+        ocaCellule('Intitulé du Formacode', { gras: true, couleur: OCA_ROUGE_FONCE, largeur: 53 }),
+        ocaCellule('Niveau approfondissement', { gras: true, centre: true, couleur: OCA_ROUGE_FONCE, largeur: 15 }),
       ],
     }),
     ...lignes.map(
       (l) =>
         new TableRow({
           children: [
-            ocaCellule(l.code, { centre: true, couleur: OCA_ROUGE_FONCE }),
-            ocaCellule(l.formacode, { centre: true, couleur: OCA_ROUGE_FONCE }),
-            ocaCellule(l.intitule, { couleur: OCA_ROUGE_FONCE }),
-            ocaCellule(l.niveau !== null ? String(l.niveau) : '—', { centre: true, couleur: OCA_ROUGE_FONCE }),
+            ocaCellule(l.code, { centre: true, couleur: OCA_ROUGE_FONCE, largeur: 20 }),
+            ocaCellule(l.formacode, { centre: true, couleur: OCA_ROUGE_FONCE, largeur: 12 }),
+            ocaCellule(l.intitule, { couleur: OCA_ROUGE_FONCE, largeur: 53 }),
+            ocaCellule(l.niveau !== null ? String(l.niveau) : '—', {
+              centre: true,
+              couleur: OCA_ROUGE_FONCE,
+              largeur: 15,
+            }),
           ],
         }),
     ),
@@ -1036,8 +1058,20 @@ interface ExportOcapiatParams {
   referentielRome: RomeReferentiel[];
 }
 
-export async function exporterFicheMetierOcapiat(params: ExportOcapiatParams): Promise<void> {
+/**
+ * `inclureInterne=false` reproduit ce que docs/EXEMPLE FICHE METIER CLIENT.docx montre :
+ * dans ce fichier, tout ce qui est à la fois surligné jaune, barré ET en rouge est le
+ * contenu marqué pour suppression avant envoi au client (convention Word classique de
+ * relecture). Ce marquage tombe très exactement sur nos trois couleurs OCA_ROUGE* : la
+ * ligne Rédacteur, les encadrés Code famille/Code couple, et toute la bannière ANNEXES.
+ * Les retirer entièrement (pas juste les recolorer) donne le contenu client.
+ */
+async function construireContenuOcapiat(
+  params: ExportOcapiatParams,
+  options: { inclureInterne: boolean },
+): Promise<Array<Paragraph | Table>> {
   const { metier: m, couples, connaissances, proches, referentielRome } = params;
+  const { inclureInterne } = options;
   const contenu: Array<Paragraph | Table> = [];
 
   const valeurAcces = new Map((m.acces ?? []).map((a) => [a.codeAcces, a.valeur] as const));
@@ -1051,13 +1085,19 @@ export async function exporterFicheMetierOcapiat(params: ExportOcapiatParams): P
       children: [new TextRun({ text: m.intitule, bold: true, size: 52, color: OCA_ORANGE, font: OCA_POLICE })],
       spacing: { after: REM * 0.15 },
     }),
-    new Paragraph({
-      children: [
-        new TextRun({ text: `Rédacteur : ${m.redacteur ?? 'XX'}`, bold: true, size: 22, color: OCA_ROUGE_VIF, font: OCA_POLICE }),
-      ],
-      spacing: { after: REM * 0.6 },
-    }),
   );
+  if (inclureInterne) {
+    contenu.push(
+      new Paragraph({
+        children: [
+          new TextRun({ text: `Rédacteur : ${m.redacteur ?? 'XX'}`, bold: true, size: 22, color: OCA_ROUGE_VIF, font: OCA_POLICE }),
+        ],
+        spacing: { after: REM * 0.6 },
+      }),
+    );
+  } else {
+    contenu.push(new Paragraph({ spacing: { after: REM * 0.3 } }));
+  }
 
   // ---------- Présentation du métier (bannière navy) ----------
   contenu.push(ocaBanniere('Présentation du métier'), espace(REM * 0.4));
@@ -1090,7 +1130,7 @@ export async function exporterFicheMetierOcapiat(params: ExportOcapiatParams): P
   contenu.push(ocaSousTitre('Niveau de qualification associé'));
   contenu.push(ocaTableauNiveauQualification(acces3, acces4));
 
-  if (m.famille) {
+  if (m.famille && inclureInterne) {
     contenu.push(ocaSousTitreRouge('Code famille de métiers'));
     contenu.push(ocaBoite(ocaTexte(libelleFamille(m.famille), { couleur: OCA_ROUGE_FONCE })));
   }
@@ -1137,14 +1177,21 @@ export async function exporterFicheMetierOcapiat(params: ExportOcapiatParams): P
           ocaTableau(
             c.motsCles!.map(
               (mc, j) =>
-                new TableRow({ children: [ocaCellule(`MOT_CLE_ACT_${j + 1}`, { gras: true }), ocaCellule(mc.libelle)] }),
+                new TableRow({
+                  children: [
+                    ocaCellule(`MOT_CLE_ACT_${j + 1}`, { gras: true, largeur: 20 }),
+                    ocaCellule(mc.libelle, { largeur: 80 }),
+                  ],
+                }),
             ),
           ),
         );
       }
 
-      contenu.push(espace(REM * 0.3), ocaSousTitreRouge('Code couple activité-compétence'));
-      contenu.push(ocaBoite(ocaTexte(c.codeActivite)));
+      if (inclureInterne) {
+        contenu.push(espace(REM * 0.3), ocaSousTitreRouge('Code couple activité-compétence'));
+        contenu.push(ocaBoite(ocaTexte(c.codeActivite)));
+      }
       if (i < triees.length - 1) contenu.push(espace(REM * 0.7));
     });
     contenu.push(espace(REM));
@@ -1178,48 +1225,72 @@ export async function exporterFicheMetierOcapiat(params: ExportOcapiatParams): P
   );
   contenu.push(espace(REM));
 
-  // ---------- ANNEXES (bannière rouge) ----------
-  contenu.push(ocaBanniere('ANNEXES (internes)', OCA_ROUGE), espace(REM * 0.4));
+  // ---------- ANNEXES (bannière rouge) — entièrement interne, absente de la version client ----------
+  if (inclureInterne) {
+    contenu.push(ocaBanniere('ANNEXES (internes)', OCA_ROUGE), espace(REM * 0.4));
 
-  contenu.push(ocaSousTitreRouge('Dossier de référence'));
-  contenu.push(ocaBoite(ocaTexte(m.dossierSource?.libelle ?? m.dossierAutre ?? 'XX')));
+    contenu.push(ocaSousTitreRouge('Dossier de référence'));
+    contenu.push(ocaBoite(ocaTexte(m.dossierSource?.libelle ?? m.dossierAutre ?? 'XX')));
 
-  contenu.push(ocaSousTitreRouge('Prénom et nom du rédacteur de la fiche'));
-  contenu.push(ocaBoite(ocaTexte(m.redacteur ?? 'XX')));
+    contenu.push(ocaSousTitreRouge('Prénom et nom du rédacteur de la fiche'));
+    contenu.push(ocaBoite(ocaTexte(m.redacteur ?? 'XX')));
 
-  contenu.push(ocaSousTitreRouge('Informations complémentaires sur le degré d’élargissement du périmètre professionnel'));
-  contenu.push(
-    ocaTableau([
-      new TableRow({
-        children: [
-          ocaCellule('Indicateurs', { gras: true, couleur: OCA_ROUGE_FONCE }),
-          ocaCellule('Valeur prise', { gras: true, couleur: OCA_ROUGE_FONCE }),
-        ],
-      }),
-      new TableRow({
-        children: [
-          ocaCellule('Prise en charge de responsabilités transversales dans le métier', { couleur: OCA_ROUGE_FONCE }),
-          ocaCellule(m.responsTransverse === 'oui' ? 'Oui' : m.responsTransverse === 'non' ? 'Non' : 'Non renseigné', {
-            couleur: OCA_ROUGE_FONCE,
-          }),
-        ],
-      }),
-      new TableRow({
-        children: [
-          ocaCellule('Interfaçage nécessaire avec les acteurs de l’organisation (amont / aval)', { couleur: OCA_ROUGE_FONCE }),
-          ocaCellule(libelleInterfaceOcapiat(m.interfaceAmontAval), { couleur: OCA_ROUGE_FONCE }),
-        ],
-      }),
-    ]),
-  );
+    contenu.push(ocaSousTitreRouge('Informations complémentaires sur le degré d’élargissement du périmètre professionnel'));
+    contenu.push(
+      ocaTableau([
+        new TableRow({
+          children: [
+            ocaCellule('Indicateurs', { gras: true, couleur: OCA_ROUGE_FONCE }),
+            ocaCellule('Valeur prise', { gras: true, couleur: OCA_ROUGE_FONCE }),
+          ],
+        }),
+        new TableRow({
+          children: [
+            ocaCellule('Prise en charge de responsabilités transversales dans le métier', { couleur: OCA_ROUGE_FONCE }),
+            ocaCellule(m.responsTransverse === 'oui' ? 'Oui' : m.responsTransverse === 'non' ? 'Non' : 'Non renseigné', {
+              couleur: OCA_ROUGE_FONCE,
+            }),
+          ],
+        }),
+        new TableRow({
+          children: [
+            ocaCellule('Interfaçage nécessaire avec les acteurs de l’organisation (amont / aval)', {
+              couleur: OCA_ROUGE_FONCE,
+            }),
+            ocaCellule(libelleInterfaceOcapiat(m.interfaceAmontAval), { couleur: OCA_ROUGE_FONCE }),
+          ],
+        }),
+      ]),
+    );
 
-  if (couples.some((c) => (c.connaissances ?? []).length > 0)) {
-    contenu.push(espace(REM * 0.4), ocaSousTitreRouge('Chaînage activité-compétence-connaissance'));
-    contenu.push(ocaTableauChainage(couples, connaissances));
+    if (couples.some((c) => (c.connaissances ?? []).length > 0)) {
+      contenu.push(espace(REM * 0.4), ocaSousTitreRouge('Chaînage activité-compétence-connaissance'));
+      contenu.push(ocaTableauChainage(couples, connaissances));
+    }
   }
 
+  return contenu;
+}
+
+export async function exporterFicheMetierOcapiat(params: ExportOcapiatParams): Promise<void> {
+  const contenu = await construireContenuOcapiat(params, { inclureInterne: true });
   const [entete, piedDePage] = await Promise.all([enteteOcapiat(), piedDePageOcapiat()]);
-  await construireEtTelecharger(contenu, `fiche-metier-ocapiat-${m.codeMetier}.docx`, {
+  await construireEtTelecharger(contenu, `fiche-metier-ocapiat-${params.metier.codeMetier}.docx`, {
+    entete,
+    piedDePage,
+  });
+}
+
+/**
+ * Version client : reproduit docs/EXEMPLE FICHE METIER CLIENT.docx — même fiche OCAPIAT,
+ * sans la ligne Rédacteur, les encadrés Code famille/Code couple ni la bannière ANNEXES
+ * (internes), qui y figurent surlignés en jaune et barrés en rouge, la marque conventionnelle
+ * de relecture Word pour « à retirer avant envoi ».
+ */
+export async function exporterFicheMetierOcapiatClient(params: ExportOcapiatParams): Promise<void> {
+  const contenu = await construireContenuOcapiat(params, { inclureInterne: false });
+  const [entete, piedDePage] = await Promise.all([enteteOcapiat(), piedDePageOcapiat()]);
+  await construireEtTelecharger(contenu, `fiche-metier-ocapiat-client-${params.metier.codeMetier}.docx`, {
     entete,
     piedDePage,
   });
