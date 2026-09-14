@@ -154,6 +154,18 @@ la valeur retenue et celle ignorée.
 SELECT lignes_lues, lignes_ok, lignes_erreur, rapport FROM import_batch ORDER BY id DESC LIMIT 1;
 ```
 
+Les classeurs citent des formacodes erronés (codes inexistants, doublons d'un même
+domaine). La liste et le code retenu pour chacun sont dans
+`back/src/database/importers/correctionsFormacodes.ts` ; l'import les applique en
+dernière étape. Pour corriger une base déjà importée sans tout rejouer :
+
+```bash
+npm run db:corriger-formacodes   # idempotent, bilan dans import_batch
+npm run db:recalc-proximites     # les fiches touchées sont datées périmées
+```
+
+En Docker : `docker compose exec back node dist/database/corrigerFormacodes.js`.
+
 ### 3. Front
 
 ```bash

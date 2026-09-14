@@ -57,6 +57,7 @@ import { importerReferentiels } from './referentiels.importer';
 import { importerMetiers } from './metiers.importer';
 import { importerCouples } from './couples.importer';
 import { importerFormacodeNiveau } from './formacodeNiveau.importer';
+import { corrigerFormacodes, afficherBilan } from './correctionsFormacodes';
 
 async function main(): Promise<void> {
   await sequelize.authenticate();
@@ -76,6 +77,11 @@ async function main(): Promise<void> {
 
   console.log('\n▶  Import des couples activité-compétence…');
   await importerCouples();
+
+  // Les classeurs citent des codes erronés (voir correctionsFormacodes.ts) : on corrige
+  // après coup plutôt que dans chacun des trois importeurs qui les rencontrent.
+  console.log('\n▶  Correction des formacodes erronés…');
+  afficherBilan(await corrigerFormacodes());
 
   console.log('\n✅ Import terminé.');
   await sequelize.close();
