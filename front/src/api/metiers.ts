@@ -11,6 +11,9 @@ import type {
   ActiviteAjoutable,
   VarianteCouple,
   EtatProximites,
+  ComparaisonMetiers,
+  Appellation,
+  MetierRomeCode,
   PaginatedResponse,
 } from '@/types/api';
 
@@ -38,6 +41,27 @@ export function obtenirMetier(code: string, signal?: AbortSignal) {
   return apiGet<Metier>(`/metiers/${encodeURIComponent(code)}`, undefined, signal);
 }
 
+export interface NouveauMetier {
+  codeFamille: string;
+  /** Nombre de métiers vu à l'ouverture du formulaire — le serveur le revérifie avant de créer. */
+  totalAttendu: number;
+  intitule: string;
+  definition: string | null;
+  dossierSourceId: number | null;
+  dossierAutre: string | null;
+  redacteur: string | null;
+  responsTransverse: 'oui' | 'non' | null;
+  interfaceAmontAval: string | null;
+}
+
+export function creerMetier(donnees: NouveauMetier, signal?: AbortSignal) {
+  return apiPost<Metier>('/metiers', donnees, signal);
+}
+
+export function supprimerMetier(code: string, signal?: AbortSignal) {
+  return apiDelete(`/metiers/${encodeURIComponent(code)}`, signal);
+}
+
 /** Champs simples uniquement — pas les listes (appellations, ROME, conditions, couples…). */
 export interface ModificationMetier {
   definition?: string | null;
@@ -48,6 +72,24 @@ export interface ModificationMetier {
 
 export function modifierMetier(code: string, modification: ModificationMetier, signal?: AbortSignal) {
   return apiPatch<Metier>(`/metiers/${encodeURIComponent(code)}`, modification, signal);
+}
+
+/** Remplace en bloc la liste des appellations (ordre = position dans le tableau). */
+export function modifierAppellations(code: string, appellations: string[], signal?: AbortSignal) {
+  return apiPut<{ data: Appellation[] }>(
+    `/metiers/${encodeURIComponent(code)}/appellations`,
+    { appellations },
+    signal,
+  );
+}
+
+/** Remplace en bloc les codes ROME (ordre = position dans le tableau). */
+export function modifierCodesRome(code: string, codesRome: string[], signal?: AbortSignal) {
+  return apiPut<{ data: MetierRomeCode[] }>(
+    `/metiers/${encodeURIComponent(code)}/rome`,
+    { codesRome },
+    signal,
+  );
 }
 
 /** Les couples activité-compétence de la fiche, dans l'ordre des blocs de collecte. */
@@ -193,6 +235,15 @@ export function listerMetiersProches(
   return apiGet<{ data: MetierProche[] }>(
     `/passerelles/${encodeURIComponent(code)}/proches`,
     { ...parametres },
+    signal,
+  );
+}
+
+/** Écart détaillé, formacode par formacode, entre le métier de départ et une passerelle. */
+export function comparerMetiers(codeSource: string, codeCible: string, signal?: AbortSignal) {
+  return apiGet<ComparaisonMetiers>(
+    `/passerelles/${encodeURIComponent(codeSource)}/vers/${encodeURIComponent(codeCible)}`,
+    undefined,
     signal,
   );
 }

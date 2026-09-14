@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { listerMetiers } from '@/api/metiers';
 import { obtenirReferentiels } from '@/api/activites';
 import { useFetch } from '@/hooks/useFetch';
@@ -36,7 +37,12 @@ export function MetiersPage() {
 
   return (
     <div className="page">
-      <h1>Métiers</h1>
+      <div className="fiche__entete-ligne">
+        <h1>Métiers</h1>
+        <Link to="/metiers/nouveau" className="bouton--export">
+          + Créer une fiche métier
+        </Link>
+      </div>
 
       <div className="barre-filtres">
         <SearchBar

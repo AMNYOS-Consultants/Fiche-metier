@@ -1,8 +1,11 @@
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import {
   obtenirMetier,
   modifierMetier,
+  modifierAppellations,
+  modifierCodesRome,
+  supprimerMetier,
   obtenirActivitesMetier,
   obtenirConnaissancesMetier,
   listerMetiersProches,
@@ -36,6 +39,9 @@ import type { MetierTransversale, MetierCondition } from '@/types/api';
 
 export function MetierDetailPage() {
   const { code = '' } = useParams();
+  const navigate = useNavigate();
+  const [suppressionMetierEnCours, setSuppressionMetierEnCours] = useState(false);
+  const [erreurSuppression, setErreurSuppression] = useState<string | null>(null);
   const [exportEnCours, setExportEnCours] = useState(false);
   const [modeleExport, setModeleExport] = useState<'standard' | 'ocapiat' | 'ocapiat-client'>('standard');
   const [dcMin, setDcMin] = useState(1);
@@ -44,6 +50,18 @@ export function MetierDetailPage() {
   const [memeFamille, setMemeFamille] = useState(false);
 
   const [rechargerMetier, setRechargerMetier] = useState(0);
+
+  // Édition des appellations et des codes ROME — deux listes courtes en texte libre / codes,
+  // remplacées en bloc à l'enregistrement (même principe que les niveaux d'un formacode).
+  const [modeEditionAppellations, setModeEditionAppellations] = useState(false);
+  const [valeursAppellations, setValeursAppellations] = useState<string[]>([]);
+  const [enregistrementAppellations, setEnregistrementAppellations] = useState(false);
+  const [erreurAppellations, setErreurAppellations] = useState<string | null>(null);
+
+  const [modeEditionRome, setModeEditionRome] = useState(false);
+  const [valeursRome, setValeursRome] = useState<string[]>([]);
+  const [enregistrementRome, setEnregistrementRome] = useState(false);
+  const [erreurRome, setErreurRome] = useState<string | null>(null);
 
   // Édition de la section « Activités et compétences ». Un mode par section, et non un mode
   // global : chaque section recharge ses propres données, qui sont coûteuses à requêter.
@@ -127,6 +145,23 @@ export function MetierDetailPage() {
     !connaissances.chargement &&
     !proches.chargement &&
     !referentiels.chargement;
+
+  async function supprimerFiche() {
+    const nbCouples = activites.donnees?.data.length ?? 0;
+    const detail = nbCouples > 0 ? ` (dont ${nbCouples} couple${nbCouples > 1 ? 's' : ''} activité-compétence)` : '';
+    if (!window.confirm(`Supprimer définitivement la fiche ${code}${detail} ?`)) return;
+
+    setSuppressionMetierEnCours(true);
+    setErreurSuppression(null);
+    try {
+      await supprimerMetier(code);
+      navigate('/metiers');
+    } catch (err) {
+      setErreurSuppression(err instanceof ApiError ? err.message : 'Suppression impossible');
+    } finally {
+      setSuppressionMetierEnCours(false);
+    }
+  }
 
   async function exporterWord() {
     if (!metier.donnees) return;
@@ -342,6 +377,48 @@ export function MetierDetailPage() {
     }
   }
 
+  function commencerEditionAppellations() {
+    setValeursAppellations((m.appellations ?? []).map((a) => a.appellation));
+    setErreurAppellations(null);
+    setModeEditionAppellations(true);
+  }
+
+  async function enregistrerAppellations() {
+    const valeurs = valeursAppellations.map((v) => v.trim()).filter((v) => v.length > 0);
+    setEnregistrementAppellations(true);
+    setErreurAppellations(null);
+    try {
+      await modifierAppellations(code, valeurs);
+      setModeEditionAppellations(false);
+      setRechargerMetier((v) => v + 1);
+    } catch (err) {
+      setErreurAppellations(err instanceof ApiError ? err.message : 'Enregistrement impossible');
+    } finally {
+      setEnregistrementAppellations(false);
+    }
+  }
+
+  function commencerEditionRome() {
+    setValeursRome((m.codesRome ?? []).map((r) => r.codeRome));
+    setErreurRome(null);
+    setModeEditionRome(true);
+  }
+
+  async function enregistrerRome() {
+    const valeurs = valeursRome.map((v) => v.trim()).filter((v) => v.length > 0);
+    setEnregistrementRome(true);
+    setErreurRome(null);
+    try {
+      await modifierCodesRome(code, valeurs);
+      setModeEditionRome(false);
+      setRechargerMetier((v) => v + 1);
+    } catch (err) {
+      setErreurRome(err instanceof ApiError ? err.message : 'Enregistrement impossible');
+    } finally {
+      setEnregistrementRome(false);
+    }
+  }
+
   return (
     <article className="page fiche">
       <header className="fiche__entete">
@@ -372,6 +449,14 @@ export function MetierDetailPage() {
               </>
             ) : (
               <>
+                <button
+                  type="button"
+                  className="bouton--retirer-ligne"
+                  onClick={supprimerFiche}
+                  disabled={suppressionMetierEnCours}
+                >
+                  {suppressionMetierEnCours ? 'Suppression…' : 'Supprimer'}
+                </button>
                 <button type="button" className="bouton--secondaire" onClick={commencerEdition}>
                   Modifier
                 </button>
@@ -412,6 +497,7 @@ export function MetierDetailPage() {
           </ul>
         )}
         {erreurEnregistrement && <ErrorMessage message={erreurEnregistrement} />}
+        {erreurSuppression && <ErrorMessage message={erreurSuppression} />}
 
         {/* `metier_proximite` est matérialisée : elle reste sur les anciennes valeurs tant
             qu'elle n'est pas rejouée. Le bandeau est en tête de fiche parce que plusieurs
@@ -508,9 +594,74 @@ export function MetierDetailPage() {
         </section>
       )}
 
-      {(m.appellations ?? []).length > 0 && (
-        <section className="fiche__section">
+      <section className="fiche__section">
+        <div className="fiche__entete-ligne">
           <h2>Autres appellations</h2>
+          <div className="fiche__entete-boutons">
+            {modeEditionAppellations ? (
+              <>
+                <button
+                  type="button"
+                  className="bouton--secondaire"
+                  onClick={() => setModeEditionAppellations(false)}
+                  disabled={enregistrementAppellations}
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  className="bouton--export"
+                  onClick={enregistrerAppellations}
+                  disabled={enregistrementAppellations}
+                >
+                  {enregistrementAppellations ? 'Enregistrement…' : 'Enregistrer'}
+                </button>
+              </>
+            ) : (
+              <button type="button" className="bouton--secondaire" onClick={commencerEditionAppellations}>
+                Modifier
+              </button>
+            )}
+          </div>
+        </div>
+
+        {erreurAppellations && <ErrorMessage message={erreurAppellations} />}
+
+        {modeEditionAppellations ? (
+          <div className="liste-edition">
+            {valeursAppellations.map((valeur, i) => (
+              <div key={i} className="liste-edition__ligne">
+                <input
+                  type="text"
+                  maxLength={255}
+                  value={valeur}
+                  disabled={enregistrementAppellations}
+                  onChange={(e) =>
+                    setValeursAppellations((prec) => prec.map((v, j) => (j === i ? e.target.value : v)))
+                  }
+                />
+                <button
+                  type="button"
+                  className="bouton--retirer-ligne"
+                  onClick={() => setValeursAppellations((prec) => prec.filter((_, j) => j !== i))}
+                  disabled={enregistrementAppellations}
+                >
+                  Retirer
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              className="bouton--secondaire bouton--ajouter"
+              onClick={() => setValeursAppellations((prec) => [...prec, ''])}
+              disabled={enregistrementAppellations || valeursAppellations.length >= 10}
+            >
+              + Ajouter une appellation
+            </button>
+          </div>
+        ) : (m.appellations ?? []).length === 0 ? (
+          <p className="vide">Aucune appellation renseignée.</p>
+        ) : (
           <ul className="badges">
             {m.appellations!.map((a) => (
               <li key={a.id} className="badge">
@@ -518,12 +669,87 @@ export function MetierDetailPage() {
               </li>
             ))}
           </ul>
-        </section>
-      )}
+        )}
+      </section>
 
-      {(m.codesRome ?? []).length > 0 && (
-        <section className="fiche__section">
+      <section className="fiche__section">
+        <div className="fiche__entete-ligne">
           <h2>Codes ROME</h2>
+          <div className="fiche__entete-boutons">
+            {modeEditionRome ? (
+              <>
+                <button
+                  type="button"
+                  className="bouton--secondaire"
+                  onClick={() => setModeEditionRome(false)}
+                  disabled={enregistrementRome}
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  className="bouton--export"
+                  onClick={enregistrerRome}
+                  disabled={enregistrementRome}
+                >
+                  {enregistrementRome ? 'Enregistrement…' : 'Enregistrer'}
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                className="bouton--secondaire"
+                onClick={commencerEditionRome}
+                disabled={!referentiels.donnees}
+              >
+                Modifier
+              </button>
+            )}
+          </div>
+        </div>
+
+        {erreurRome && <ErrorMessage message={erreurRome} />}
+
+        {modeEditionRome ? (
+          <div className="liste-edition">
+            {valeursRome.map((valeur, i) => (
+              <div key={i} className="liste-edition__ligne">
+                <select
+                  value={valeur}
+                  disabled={enregistrementRome}
+                  onChange={(e) =>
+                    setValeursRome((prec) => prec.map((v, j) => (j === i ? e.target.value : v)))
+                  }
+                >
+                  <option value="">— Choisir —</option>
+                  {(referentiels.donnees?.rome ?? []).map((r) => (
+                    <option key={r.codeRome} value={r.codeRome}>
+                      {r.libelle ? `${r.codeRome} — ${r.libelle}` : r.codeRome}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="bouton--retirer-ligne"
+                  onClick={() => setValeursRome((prec) => prec.filter((_, j) => j !== i))}
+                  disabled={enregistrementRome}
+                >
+                  Retirer
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              className="bouton--secondaire bouton--ajouter"
+              onClick={() => setValeursRome((prec) => [...prec, ''])}
+              disabled={enregistrementRome || valeursRome.length >= 5}
+            >
+              + Ajouter un code ROME
+            </button>
+          </div>
+        ) : (m.codesRome ?? []).length === 0 ? (
+          <p className="vide">Aucun code ROME renseigné.</p>
+        ) : (
           <ul className="badges">
             {m.codesRome!.map((r) => (
               <li key={r.id} className="badge">
@@ -531,90 +757,88 @@ export function MetierDetailPage() {
               </li>
             ))}
           </ul>
-        </section>
-      )}
+        )}
+      </section>
 
-      {(modeEditionConditions || (m.conditions ?? []).length > 0 || (m.acces ?? []).length > 0) && (
-        <section className="fiche__section">
-          <div className="fiche__entete-ligne">
-            <h2>Conditions d’exercice du métier</h2>
-            <div className="fiche__entete-boutons">
-              {modeEditionConditions ? (
-                <>
-                  <button
-                    type="button"
-                    className="bouton--secondaire"
-                    onClick={() => setModeEditionConditions(false)}
-                    disabled={enregistrementConditions}
-                  >
-                    Annuler
-                  </button>
-                  <button
-                    type="button"
-                    className="bouton--export"
-                    onClick={enregistrerConditions}
-                    disabled={enregistrementConditions}
-                  >
-                    {enregistrementConditions ? 'Enregistrement…' : 'Enregistrer'}
-                  </button>
-                </>
-              ) : (
+      <section className="fiche__section">
+        <div className="fiche__entete-ligne">
+          <h2>Conditions d’exercice du métier</h2>
+          <div className="fiche__entete-boutons">
+            {modeEditionConditions ? (
+              <>
                 <button
                   type="button"
                   className="bouton--secondaire"
-                  onClick={commencerEditionConditions}
-                  disabled={!referentiels.donnees}
+                  onClick={() => setModeEditionConditions(false)}
+                  disabled={enregistrementConditions}
                 >
-                  Modifier
+                  Annuler
                 </button>
-              )}
-            </div>
+                <button
+                  type="button"
+                  className="bouton--export"
+                  onClick={enregistrerConditions}
+                  disabled={enregistrementConditions}
+                >
+                  {enregistrementConditions ? 'Enregistrement…' : 'Enregistrer'}
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                className="bouton--secondaire"
+                onClick={commencerEditionConditions}
+                disabled={!referentiels.donnees}
+              >
+                Modifier
+              </button>
+            )}
           </div>
+        </div>
 
-          {erreurConditions && <ErrorMessage message={erreurConditions} />}
-          {modeEditionConditions && (
-            <p className="detail">
-              Le niveau ou l’intervalle de niveaux RNCP attendu (première question des
-              conditions d’accès) entre dans le calcul des passerelles ; le reste de la
-              section n’a aucun effet dessus.
-            </p>
-          )}
+        {erreurConditions && <ErrorMessage message={erreurConditions} />}
+        {modeEditionConditions && (
+          <p className="detail">
+            Le niveau ou l’intervalle de niveaux RNCP attendu (première question des
+            conditions d’accès) entre dans le calcul des passerelles ; le reste de la
+            section n’a aucun effet dessus.
+          </p>
+        )}
 
-          <ConditionsFiche
-            conditions={modeEditionConditions ? conditionsEditables() : (m.conditions ?? [])}
-            edition={
-              modeEditionConditions
-                ? {
-                    valeurs: valeursConditions,
-                    onChange: (codeCondition, valeur) =>
-                      setValeursConditions((precedent) => ({ ...precedent, [codeCondition]: valeur })),
-                    desactive: enregistrementConditions,
-                  }
-                : undefined
-            }
-          />
-
-          {(modeEditionConditions || (m.acces ?? []).length > 0) && (
-            <div className="acces">
-              <h3 className="transversales__titre">Conditions d’accès au métier</h3>
-              <AccesFiche
-                acces={m.acces ?? []}
-                criteres={referentiels.donnees?.acces ?? []}
-                edition={
-                  modeEditionConditions
-                    ? {
-                        valeurs: valeursAcces,
-                        onChange: (codeAcces, valeur) =>
-                          setValeursAcces((precedent) => ({ ...precedent, [codeAcces]: valeur })),
-                        desactive: enregistrementConditions,
-                      }
-                    : undefined
+        <ConditionsFiche
+          conditions={modeEditionConditions ? conditionsEditables() : (m.conditions ?? [])}
+          edition={
+            modeEditionConditions
+              ? {
+                  valeurs: valeursConditions,
+                  onChange: (codeCondition, valeur) =>
+                    setValeursConditions((precedent) => ({ ...precedent, [codeCondition]: valeur })),
+                  desactive: enregistrementConditions,
                 }
-              />
-            </div>
-          )}
-        </section>
-      )}
+              : undefined
+          }
+        />
+
+        {(modeEditionConditions || (m.acces ?? []).length > 0) && (
+          <div className="acces">
+            <h3 className="transversales__titre">Conditions d’accès au métier</h3>
+            <AccesFiche
+              acces={m.acces ?? []}
+              criteres={referentiels.donnees?.acces ?? []}
+              edition={
+                modeEditionConditions
+                  ? {
+                      valeurs: valeursAcces,
+                      onChange: (codeAcces, valeur) =>
+                        setValeursAcces((precedent) => ({ ...precedent, [codeAcces]: valeur })),
+                      desactive: enregistrementConditions,
+                    }
+                  : undefined
+              }
+            />
+          </div>
+        )}
+      </section>
 
       <section className="fiche__section">
         <div className="fiche__entete-ligne">

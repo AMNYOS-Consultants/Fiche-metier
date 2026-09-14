@@ -3,8 +3,12 @@ import { asyncHandler } from '../middlewares/asyncHandler';
 import {
   listerMetiers,
   listerMetiersOptions,
+  creerMetier,
+  supprimerMetier,
   obtenirMetier,
   modifierMetier,
+  modifierAppellations,
+  modifierCodesRome,
   obtenirActivitesMetier,
   obtenirConnaissancesMetier,
 } from '../controllers/metier.controller';
@@ -21,10 +25,12 @@ import { modifierConditions, modifierAcces } from '../controllers/condition.cont
 export const metierRoutes = Router();
 
 metierRoutes.get('/', asyncHandler(listerMetiers));
+metierRoutes.post('/', asyncHandler(creerMetier));
 // Avant `/:code` : sinon Express résout `options` comme un code métier.
 metierRoutes.get('/options', asyncHandler(listerMetiersOptions));
 metierRoutes.get('/:code', asyncHandler(obtenirMetier));
 metierRoutes.patch('/:code', asyncHandler(modifierMetier));
+metierRoutes.delete('/:code', asyncHandler(supprimerMetier));
 metierRoutes.get('/:code/activites', asyncHandler(obtenirActivitesMetier));
 metierRoutes.get('/:code/connaissances', asyncHandler(obtenirConnaissancesMetier));
 
@@ -41,3 +47,7 @@ metierRoutes.put('/:code/transversales', asyncHandler(modifierTransversales));
 // Conditions d'exercice et d'accès — chacune enregistrée en bloc, voir le contrôleur.
 metierRoutes.put('/:code/conditions', asyncHandler(modifierConditions));
 metierRoutes.put('/:code/acces', asyncHandler(modifierAcces));
+
+// Appellations et codes ROME — remplacement en bloc, voir le contrôleur.
+metierRoutes.put('/:code/appellations', asyncHandler(modifierAppellations));
+metierRoutes.put('/:code/rome', asyncHandler(modifierCodesRome));

@@ -360,6 +360,12 @@ h2 {
   padding: calc(1rem - 1px) calc(1.25rem - 1px);
 }
 
+/* Formulaire de création de fiche métier : un espacement régulier entre les groupes de
+   champs, sans marge sur le premier (déjà collé au message d'erreur/au haut de la carte). */
+.nouveau-metier > * + * {
+  margin-top: 1rem;
+}
+
 .edition-couple {
   display: flex;
   flex-direction: column;
@@ -441,6 +447,27 @@ h2 {
 
 .bouton--ajouter {
   margin-top: 0.75rem;
+}
+
+/* Liste éditable à lignes ajoutables/retirables — appellations, codes ROME. */
+.liste-edition {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.liste-edition__ligne {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.liste-edition__ligne input,
+.liste-edition__ligne select {
+  flex: 1;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--couleur-bordure);
+  border-radius: var(--rayon);
+  background: var(--couleur-surface);
+  font: inherit;
 }
 
 /* Panneau bas de page : la méthode de calcul et sa référence, choisies par niveau via un
@@ -1134,4 +1161,46 @@ h2 {
 .passerelles-graphique-entete__case input {
   width: 1rem;
   height: 1rem;
+}
+
+/* Infobulle de comparaison, au survol d'un métier passerelle — voir ComparaisonInfobulle. */
+.comparaison-infobulle {
+  position: relative;
+  display: inline-block;
+}
+.comparaison-infobulle__panneau {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 30;
+  margin-top: 0.35rem;
+  padding: 0.85rem 1rem;
+  min-width: 26rem;
+  max-width: 34rem;
+  max-height: 22rem;
+  overflow-y: auto;
+  background: var(--couleur-surface);
+  border: 1px solid var(--couleur-bordure);
+  border-radius: var(--rayon);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  font-weight: 400;
+  white-space: normal;
+  text-align: left;
+  cursor: default;
+}
+.comparaison-infobulle__groupe + .comparaison-infobulle__groupe {
+  margin-top: 0.75rem;
+}
+.comparaison-infobulle__titre {
+  margin: 0 0 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--couleur-texte-doux);
+}
+.comparaison-infobulle__tableau {
+  font-size: 0.8rem;
+}
+.comparaison-infobulle__tableau th,
+.comparaison-infobulle__tableau td {
+  padding: 0.3rem 0.5rem;
 }

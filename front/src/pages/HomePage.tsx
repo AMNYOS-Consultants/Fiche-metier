@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { exporterBaseGenerale } from '@/utils/exportCsv';
+import { exporterBaseGeneraleExcel } from '@/utils/exportExcel';
 
 const SECTIONS = [
   {
@@ -29,7 +29,7 @@ export function HomePage() {
   async function exporter() {
     setExportEnCours(true);
     try {
-      await exporterBaseGenerale();
+      await exporterBaseGeneraleExcel();
     } finally {
       setExportEnCours(false);
     }
@@ -44,7 +44,7 @@ export function HomePage() {
           className="bouton--export"
           onClick={exporter}
           disabled={exportEnCours}
-          title="Métiers, couples activité-compétence, domaines de connaissance, ressources transverses, conditions d’exercice et d’accès — six fichiers .csv dans une archive."
+          title="Métiers, couples activité-compétence, domaines de connaissance, ressources transverses, conditions d’exercice et d’accès — un seul fichier .xlsx, une feuille par table."
         >
           {exportEnCours ? 'Export en cours…' : 'Exporter toute la base'}
         </button>

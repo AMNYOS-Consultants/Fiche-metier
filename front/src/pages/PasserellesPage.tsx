@@ -6,6 +6,7 @@ import { Loader } from '@/components/Loader';
 import { ErrorMessage } from '@/components/ErrorMessage';
 import { PasserellesScatter } from '@/components/PasserellesScatter';
 import { FiltresPasserelles } from '@/components/FiltresPasserelles';
+import { ComparaisonInfobulle } from '@/components/ComparaisonInfobulle';
 import type { MetierProche } from '@/types/api';
 
 const RESULTAT_VIDE: { data: MetierProche[] } = { data: [] };
@@ -152,7 +153,9 @@ export function PasserellesPage() {
                   {resultats.map((m) => (
                     <tr key={m.codeMetier}>
                       <th scope="row">
-                        <Link to={`/metiers/${encodeURIComponent(m.codeMetier)}`}>{m.intitule}</Link>
+                        <ComparaisonInfobulle codeSource={codeSource} codeCible={m.codeMetier}>
+                          <Link to={`/metiers/${encodeURIComponent(m.codeMetier)}`}>{m.intitule}</Link>
+                        </ComparaisonInfobulle>
                       </th>
                       <td className="colonne-etroite">{m.nbDcCommuns ?? '—'}</td>
                       <td className="colonne-etroite">

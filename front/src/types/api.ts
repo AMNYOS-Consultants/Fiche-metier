@@ -31,6 +31,12 @@ export interface Appellation {
   ordre: number;
 }
 
+export interface MetierRomeCode {
+  id: number;
+  codeRome: string;
+  ordre: number;
+}
+
 export interface CritereCondition {
   codeCondition: string;
   libelle: string;
@@ -91,7 +97,7 @@ export interface Metier {
   famille?: FamilleMetier | null;
   dossierSource?: DossierSource | null;
   appellations?: Appellation[];
-  codesRome?: Array<{ id: number; codeRome: string; ordre: number }>;
+  codesRome?: MetierRomeCode[];
   conditions?: MetierCondition[];
   transversales?: MetierTransversale[];
   acces?: MetierAcces[];
@@ -235,6 +241,21 @@ export interface MetierProche {
   dureeAcquisitionHeures: number | null;
   degreElargissement: number | null;
   nbDcCommuns: number | null;
+}
+
+export interface EcartConnaissance {
+  codeFormacode: string;
+  intitule: string;
+  niveauSource: number | null;
+  niveauCible: number | null;
+  /** > 0 : à acquérir. <= 0 : déjà maîtrisé au niveau requis. */
+  heuresAcquerir: number | null;
+}
+
+export interface ComparaisonMetiers {
+  ecarts: EcartConnaissance[];
+  totalHeures: number;
+  nbDcCommuns: number;
 }
 
 export interface RomeReferentiel {

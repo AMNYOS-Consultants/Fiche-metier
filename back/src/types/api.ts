@@ -43,4 +43,8 @@ export class HttpError extends Error {
   static badRequest(message: string, details?: unknown): HttpError {
     return new HttpError(400, message, 'REQUETE_INVALIDE', details);
   }
+
+  static conflict(message: string, details?: unknown): HttpError {
+    return new HttpError(409, message, 'CONFLIT', details);
+  }
 }

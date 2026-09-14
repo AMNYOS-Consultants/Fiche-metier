@@ -123,7 +123,26 @@ export async function comparerMetiers(
     // Les connaissances pendent du couple (migration 008) : la jointure se fait sur son
     // identifiant. Le MAX retient le niveau le plus élevé quand un formacode revient sur
     // plusieurs couples du même métier.
-    `WITH dc_source AS (
+    //
+    // `formacode_niveau` porte jusqu'à 3 lignes par (formacode, niveau) — une par origine
+    // (base_formacodes / base_competences / outil_fiche_metier, voir migration 011). Une
+    // jointure directe sur (formacode, niveau) sans filtrer l'origine multiplie les lignes
+    // du résultat par autant d'origines présentes ; `duree_prioritaire` n'en retient qu'une,
+    // avec la même priorité que `chargerDureesParFormacodeNiveau()` plus bas dans ce fichier.
+    `WITH duree_prioritaire AS (
+        SELECT code_formacode, niveau, duree_heures,
+               ROW_NUMBER() OVER (
+                 PARTITION BY code_formacode, niveau
+                 ORDER BY CASE origine
+                            WHEN 'outil_fiche_metier' THEN 3
+                            WHEN 'base_formacodes' THEN 2
+                            WHEN 'base_competences' THEN 1
+                            ELSE 0
+                          END DESC
+               ) AS rang
+          FROM formacode_niveau
+     ),
+     dc_source AS (
         SELECT ac.code_formacode, MAX(ac.niveau) AS niveau
           FROM metier_activite ma
           JOIN activite_connaissance ac ON ac.metier_activite_id = ma.id
@@ -148,12 +167,14 @@ export async function comparerMetiers(
        FROM dc_cible c
        JOIN formacode f ON f.code_formacode = c.code_formacode
        LEFT JOIN dc_source s ON s.code_formacode = c.code_formacode
-       LEFT JOIN formacode_niveau fn_cible
+       LEFT JOIN duree_prioritaire fn_cible
               ON fn_cible.code_formacode = c.code_formacode
              AND fn_cible.niveau = c.niveau
-       LEFT JOIN formacode_niveau fn_source
+             AND fn_cible.rang = 1
+       LEFT JOIN duree_prioritaire fn_source
               ON fn_source.code_formacode = c.code_formacode
              AND fn_source.niveau = s.niveau
+             AND fn_source.rang = 1
       ORDER BY heuresAcquerir DESC`,
     { replacements: { codeSource, codeCible }, type: QueryTypes.SELECT },
   );

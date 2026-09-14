@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Layout } from '@/components/Layout';
 import { HomePage } from '@/pages/HomePage';
 import { MetiersPage } from '@/pages/MetiersPage';
+import { NouveauMetierPage } from '@/pages/NouveauMetierPage';
 import { MetierDetailPage } from '@/pages/MetierDetailPage';
 import { ActivitesPage } from '@/pages/ActivitesPage';
 import { ActiviteDetailPage } from '@/pages/ActiviteDetailPage';
@@ -30,6 +31,7 @@ export function App() {
           >
             <Route index element={<HomePage />} />
             <Route path="metiers" element={<MetiersPage />} />
+            <Route path="metiers/nouveau" element={<NouveauMetierPage />} />
             <Route path="metiers/:code" element={<MetierDetailPage />} />
             <Route path="activites" element={<ActivitesPage />} />
             <Route path="activites/incoherences" element={<IncoherencesPage />} />

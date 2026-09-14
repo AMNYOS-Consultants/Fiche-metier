@@ -11,10 +11,10 @@
   },
   "dependencies": {
     "docx": "^9.7.1",
-    "jszip": "^3.10.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "react-router-dom": "^7.18.2"
+    "react-router-dom": "^7.18.2",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/react": "^19.2.18",
