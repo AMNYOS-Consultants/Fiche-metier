@@ -35,7 +35,13 @@ export function ActiviteDetailPage() {
       <header className="fiche__entete">
         <span className="carte__code">{a.codeActivite}</span>
         <h1>{couples[0]?.intituleActivite ?? a.intituleActivite ?? 'Activité'}</h1>
-        {a.famille?.domaine1 && <p className="fiche__famille">{a.famille.domaine1}</p>}
+        {(a.famille?.domaine1 || a.famille?.domaine2) && (
+          <p className="fiche__famille">
+            {[a.famille?.domaine1, a.famille?.domaine2].filter(Boolean).join(' · ')}
+          </p>
+        )}
+        {/* Catégorisation libre, pas assez tranchée pour une vignette : visible seulement ici. */}
+        {a.famille?.domaine3 && <p className="fiche__famille-detail">{a.famille.domaine3}</p>}
       </header>
 
       {(a.connaissances ?? []).length > 0 && (

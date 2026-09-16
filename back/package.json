@@ -13,6 +13,7 @@
     "db:sync": "tsx src/database/sync.ts",
     "db:recalc-proximites": "tsx src/database/recalculerProximites.ts",
     "db:corriger-formacodes": "tsx src/database/corrigerFormacodes.ts",
+    "db:backfill-familles-activite": "tsx src/database/backfillFamilleActivite.ts",
     "import:excel": "tsx src/database/importers/index.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --ext .ts"

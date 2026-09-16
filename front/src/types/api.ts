@@ -182,9 +182,22 @@ export interface Activite {
   codeFamilleActivite: string | null;
   intituleActivite: string | null;
   intituleCompetence: string | null;
-  famille?: { codeFamilleActivite: string; domaine1: string | null } | null;
+  famille?: FamilleActivite | null;
   connaissances?: ActiviteConnaissance[];
   couples?: Couple[];
+}
+
+/**
+ * nomencl_FAMACTIVITES : catégorisation des activités. `domaine3` (texte libre, souvent
+ * variable d'un couple à l'autre pour un même `domaine1`/`domaine2`) n'est pas assez
+ * tranché pour servir de catégorie visuelle — affiché seulement dans le détail d'un couple.
+ */
+export interface FamilleActivite {
+  codeFamilleActivite: string;
+  domaine1: string | null;
+  domaine2: string | null;
+  domaine3: string | null;
+  exempleCompetence: string | null;
 }
 
 /** Ligne du tableau « Domaines de connaissances structurant pour l'exercice du métier ». */
@@ -297,7 +310,7 @@ export interface VarianteDetaillee {
 
 export interface Referentiels {
   famillesMetier: FamilleMetier[];
-  famillesActivite: Array<{ codeFamilleActivite: string; domaine1: string | null }>;
+  famillesActivite: FamilleActivite[];
   conditions: CritereCondition[];
   transversales: CompetenceTransversale[];
   acces: CritereAcces[];

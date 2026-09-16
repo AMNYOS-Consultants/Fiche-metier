@@ -16,6 +16,7 @@ import {
   ActiviteConnaissance,
   Formacode,
   Nsf,
+  FamilleActivite,
 } from '../../models';
 import { lireFeuilleBrute, texte, nombre } from './xlsxReader';
 
@@ -121,7 +122,7 @@ function lireBlocs(ligne: unknown[]): Bloc[] {
     };
 
     // Le code est éclaté en trois cellules : « C » / « 02 » / « 04.03 » -> « C.02.04.03 ».
-    const codeActivite = plage(B.code).join('.');
+    const codeActivite = corrigerCodeActivite(plage(B.code).join('.'));
     if (!codeActivite) continue;
 
     blocs.push({
@@ -138,6 +139,33 @@ function lireBlocs(ligne: unknown[]): Bloc[] {
   }
 
   return blocs;
+}
+
+/**
+ * Corrige les erreurs de saisie connues du classeur source, sur la cellule du sous-code
+ * (deuxième segment) : « B.025.32.01 » n'a pas de sens (3 chiffres) et vaut en réalité
+ * « B.02.32.01 » (confirmé par le métier).
+ */
+const CODES_ACTIVITE_CORRIGES: ReadonlyMap<string, string> = new Map([
+  ['B.025.32.01', 'B.02.32.01'],
+]);
+
+function corrigerCodeActivite(code: string): string {
+  return CODES_ACTIVITE_CORRIGES.get(code) ?? code;
+}
+
+/**
+ * Déduit le code de famille (« B.01 ») du code activité (« B.01.02.01 ») : lettre en
+ * majuscule, sous-code sur 2 chiffres. Récupère ainsi les préfixes mal saisis dans la
+ * source (« E.2 », « k.02 », « I.3 » -> « E.02 », « K.02 », « I.03 ») ; ne renvoie le code
+ * que s'il correspond à une famille réellement connue de `famille_activite`, pour ne
+ * jamais violer la clé étrangère (« B.025 », 3 chiffres, reste irrécupérable).
+ */
+export function deriverCodeFamille(codeActivite: string, famillesConnues: Set<string>): string | null {
+  const [lettre, sousCode] = codeActivite.split('.');
+  if (!lettre || !sousCode) return null;
+  const code = `${lettre.toUpperCase()}.${sousCode.padStart(2, '0')}`;
+  return famillesConnues.has(code) ? code : null;
 }
 
 export async function importerCouples(): Promise<void> {
@@ -170,6 +198,11 @@ export async function importerCouples(): Promise<void> {
     );
     const nsfConnus = new Set(
       (await Nsf.findAll({ attributes: ['codeNsf'], transaction })).map((n) => n.codeNsf),
+    );
+    const famillesConnues = new Set(
+      (await FamilleActivite.findAll({ attributes: ['codeFamilleActivite'], transaction })).map(
+        (f) => f.codeFamilleActivite,
+      ),
     );
 
     // Cache mémoire des mots-clés : 1 316 valeurs distinctes pour 1 818 couples,
@@ -219,6 +252,7 @@ export async function importerCouples(): Promise<void> {
           motsCles,
           formacodesConnus,
           nsfConnus,
+          famillesConnues,
           domainesIgnores,
           transaction,
         );
@@ -261,18 +295,17 @@ async function enregistrerCouple(
   motsCles: Map<string, number>,
   formacodesConnus: Set<string>,
   nsfConnus: Set<string>,
+  famillesConnues: Set<string>,
   ignores: Array<{ couple: number; formacode: string; motif: string }>,
   transaction: Transaction,
 ): Promise<void> {
   // Le catalogue ne porte que le code : le libellé qui fait foi est celui du couple,
   // car 121 codes sont rédigés différemment selon le métier (migration 006).
-  // `code_famille_activite` reste NULL : 7 préfixes de la source sont malformés
-  // (« B.025 », « E.2 », « k.02 ») et ne correspondent à aucune entrée de nomencl_FAMACTIVITES.
   await Activite.findOrCreate({
     where: { codeActivite: bloc.codeActivite },
     defaults: {
       codeActivite: bloc.codeActivite,
-      codeFamilleActivite: null,
+      codeFamilleActivite: deriverCodeFamille(bloc.codeActivite, famillesConnues),
       intituleActivite: bloc.intituleActivite,
       intituleCompetence: bloc.intituleCompetence,
       dossierSourceId: dossierId,

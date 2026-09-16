@@ -45,6 +45,8 @@ export function ActivitesPage() {
             <thead>
               <tr>
                 <th>Code</th>
+                <th>Domaine d'activité 1</th>
+                <th>Domaine d'activité 2</th>
                 <th>Activité</th>
                 <th>Compétence</th>
               </tr>
@@ -57,6 +59,8 @@ export function ActivitesPage() {
                       {a.codeActivite}
                     </Link>
                   </td>
+                  <td>{a.famille?.domaine1 ?? '—'}</td>
+                  <td>{a.famille?.domaine2 ?? '—'}</td>
                   <td>{a.intituleActivite}</td>
                   <td>{a.intituleCompetence ?? '—'}</td>
                 </tr>

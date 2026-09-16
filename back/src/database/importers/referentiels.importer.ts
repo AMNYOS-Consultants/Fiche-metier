@@ -5,6 +5,7 @@ import {
   sequelize,
   DossierSource,
   FamilleMetier,
+  FamilleActivite,
   CritereCondition,
   CompetenceTransversale,
   CritereAcces,
@@ -66,6 +67,7 @@ export async function importerReferentiels(): Promise<void> {
   const collecte = lireFeuilleBrute(fichier, 'Outil_collecte_fiche_metier');
   const cond = lireFeuilleBrute(fichier, 'nomencl_COND');
   const transv = lireFeuilleBrute(fichier, 'nomencl_TRANSV');
+  const famActivites = lireFeuilleBrute(fichier, 'nomencl_FAMACTIVITES');
 
   const batch = await ImportBatch.create({
     fichier: path.basename(fichier),
@@ -81,6 +83,7 @@ export async function importerReferentiels(): Promise<void> {
     const bilan = {
       dossiersSource: await importerDossiers(collecte, transaction),
       famillesMetier: await importerFamilles(collecte, transaction),
+      famillesActivite: await importerFamillesActivite(famActivites, transaction),
       conditions: await importerConditions(cond, transaction),
       transversales: await importerTransversales(transv, transaction),
       acces: await importerAcces(transaction),
@@ -141,6 +144,78 @@ async function importerFamilles(lignes: unknown[][], transaction: Transaction): 
     await FamilleMetier.upsert({ codeFamille, intitule, definition: null }, { transaction });
   }
   return familles.size;
+}
+
+/**
+ * nomencl_FAMACTIVITES s'arrête à D.08, mais des activités réelles utilisent D.09 et D.10
+ * (23 couples en base). Reprises du fichier de 2021 « Base couples activités compétences
+ * après MAJ nomenclature » (colonnes INT_DOM_1/2/3_ACT), qui reste cohérent sur ces deux
+ * familles une fois écartée une erreur de saisie du classeur (deux couples D.09.07.01 et
+ * D.09.08.01 y sont classés à tort sous « D.10 » — leur propre code les rattache à D.09,
+ * conforme aux 13 autres couples D.09). Ce fichier n'a pas de colonne « exemple de
+ * compétence », d'où `exempleCompetence: null` pour ces deux familles.
+ */
+const FAMILLES_MANQUANTES: ReadonlyArray<{
+  codeFamilleActivite: string;
+  domaine1: string;
+  domaine2: string;
+  domaine3: string;
+}> = [
+  {
+    codeFamilleActivite: 'D.09',
+    domaine1: 'Production ',
+    domaine2: 'Production végétale et animale',
+    domaine3: 'exploitation, entretien, récolte, tri, conditionnement des cultures et élevages',
+  },
+  {
+    codeFamilleActivite: 'D.10',
+    domaine1: 'Production ',
+    domaine2: 'Production alimentaire et culinaire',
+    domaine3: 'Confection de plats, valorisation des produits',
+  },
+];
+
+/**
+ * nomencl_FAMACTIVITES : 37 familles d'activités (« A.01 », « B.02 »…), en-tête ligne 1,
+ * données à partir de la ligne 2 — code en A, les trois niveaux de domaine en B/C/D,
+ * l'exemple de compétence contextualisée en E. Colonnes F/G (numéro + lettre) ne sont que
+ * des aides de tri, ignorées ici.
+ *
+ * C'est la seule source de ces libellés : `data_ACT_COMP_CONN` (couples.importer.ts) les
+ * répète sur chaque couple, mais avec des variantes de saisie (207 des 1546 lignes
+ * divergent de la famille qu'elles citent) — cette feuille fait foi. `FAMILLES_MANQUANTES`
+ * comble les deux familles qu'elle ne couvre pas.
+ */
+export async function importerFamillesActivite(
+  lignes: unknown[][],
+  transaction: Transaction,
+): Promise<number> {
+  let n = 0;
+  for (const ligne of lignes.slice(1)) {
+    const code = texte(ligne[0]);
+    if (!code || !/^[A-Z]\.\d{2}$/.test(code)) continue;
+
+    await FamilleActivite.upsert(
+      {
+        codeFamilleActivite: code,
+        domaine1: texte(ligne[1]),
+        domaine2: texte(ligne[2]),
+        domaine3: texte(ligne[3]),
+        exempleCompetence: texte(ligne[4]),
+      },
+      { transaction },
+    );
+    n += 1;
+  }
+
+  for (const famille of FAMILLES_MANQUANTES) {
+    await FamilleActivite.upsert(
+      { ...famille, exempleCompetence: null },
+      { transaction },
+    );
+    n += 1;
+  }
+  return n;
 }
 
 /** nomencl_COND : code en colonne 0, libellé en colonne 1, à partir de la ligne 3. */

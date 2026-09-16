@@ -256,6 +256,12 @@ h2 {
   color: var(--couleur-texte-doux);
   margin: 0;
 }
+.fiche__famille-detail {
+  color: var(--couleur-texte-doux);
+  font-size: 0.9em;
+  font-style: italic;
+  margin: 0.15rem 0 0;
+}
 
 .fiche__entete-boutons {
   display: flex;
