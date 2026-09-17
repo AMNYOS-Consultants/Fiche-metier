@@ -1,6 +1,8 @@
 import { apiGet, apiPost, apiPut, apiDelete } from './client';
 import type {
   Activite,
+  ActiviteConnaissance,
+  FamilleActiviteComptee,
   Formacode,
   FormacodeNiveau,
   Referentiels,
@@ -24,6 +26,47 @@ export function listerActivites(filtres: FiltresActivites, signal?: AbortSignal)
 
 export function obtenirActivite(code: string, signal?: AbortSignal) {
   return apiGet<Activite>(`/activites/${encodeURIComponent(code)}`, undefined, signal);
+}
+
+/**
+ * Emplacement du nouveau couple : une seule des trois formes.
+ *   - `halo` (« I.02.08 ») : le 3e segment existe, on ajoute une déclinaison.
+ *   - `famille` (« I.02 ») : le 2e segment existe, on ajoute une activité.
+ *   - `nouvelleFamille` : on crée le 2e segment, sous une lettre existante ou nouvelle.
+ */
+export interface EmplacementCouple {
+  famille?: string;
+  halo?: string;
+  nouvelleFamille?: {
+    lettre: string;
+    /** Requis seulement si la lettre est nouvelle. */
+    domaine1?: string;
+    domaine2: string;
+    domaine3?: string;
+  };
+}
+
+export interface NouveauCouple extends EmplacementCouple {
+  codeMetier: string;
+  intituleActivite: string;
+  intituleCompetence: string | null;
+  detailsActivite: string[];
+  detailsCompetence: string[];
+  niveauxMaitrise: Array<{ niveau: number; description: string }>;
+  connaissances: Array<{ codeFormacode: string; niveau: number | null }>;
+}
+
+/**
+ * Crée un couple activité-compétence de toutes pièces : l'entrée de catalogue et son
+ * rattachement à la fiche métier. Le code est attribué par le serveur, jamais saisi.
+ */
+export function creerCouple(donnees: NouveauCouple, signal?: AbortSignal) {
+  return apiPost<{ codeActivite: string; coupleId: number }>('/activites', donnees, signal);
+}
+
+/** L'arborescence de la page : familles portant au moins une activité, avec leur compte. */
+export function listerFamillesActivite(signal?: AbortSignal) {
+  return apiGet<{ data: FamilleActiviteComptee[] }>('/activites/familles', undefined, signal);
 }
 
 export interface FiltresFormacodes {
@@ -114,6 +157,57 @@ export function harmoniserCouple(
 ) {
   return apiPut<{ nbMetiersAffectes: number }>(
     `/activites/${encodeURIComponent(codeActivite)}/harmoniser`,
+    { coupleModeleId, edition },
+    signal,
+  );
+}
+
+/**
+ * Réécrit une rédaction sur les seuls couples qui la portent — les autres rédactions du
+ * même code activité ne sont pas touchées (contrairement à `harmoniserCouple`).
+ */
+export function modifierRedaction(
+  codeActivite: string,
+  coupleModeleId: number,
+  edition: EditionModele,
+  signal?: AbortSignal,
+) {
+  return apiPut<{ nbCouplesModifies: number }>(
+    `/activites/${encodeURIComponent(codeActivite)}/redaction`,
+    { coupleModeleId, edition },
+    signal,
+  );
+}
+
+/**
+ * Domaines de connaissance d'UN couple (métier ↔ activité) : remplacement en bloc. Ils
+ * pendent du couple, deux métiers partageant un code peuvent porter les leurs.
+ */
+export function modifierConnaissancesCouple(
+  codeActivite: string,
+  coupleId: number,
+  connaissances: Array<{ codeFormacode: string; niveau: number | null }>,
+  signal?: AbortSignal,
+) {
+  return apiPut<{ data: ActiviteConnaissance[] }>(
+    `/activites/${encodeURIComponent(codeActivite)}/couples/${coupleId}/connaissances`,
+    { connaissances },
+    signal,
+  );
+}
+
+/**
+ * L'autre issue à une incohérence : détacher cette rédaction vers un nouveau code du même
+ * halo (`I.02.08.01` -> `I.02.08.24`), au lieu de l'imposer aux autres métiers.
+ */
+export function scinderVariante(
+  codeActivite: string,
+  coupleModeleId: number,
+  edition?: EditionModele,
+  signal?: AbortSignal,
+) {
+  return apiPost<{ codeActivite: string; nbMetiersDeplaces: number }>(
+    `/activites/${encodeURIComponent(codeActivite)}/scinder`,
     { coupleModeleId, edition },
     signal,
   );

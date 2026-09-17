@@ -1,3 +1,4 @@
+import { dateModification } from '@/utils/format';
 import type { Couple, Detail } from '@/types/api';
 
 const ORDINAUX = ['Premier', 'Deuxième', 'Troisième', 'Quatrième', 'Cinquième', 'Sixième'];
@@ -51,6 +52,7 @@ export function CouplesFiche({ couples, onSupprimer, suppressionEnCours }: Props
                   collecte. La fiche doit rester « Premier, Deuxième, Troisième… ». */}
               <span>{ordinal(position + 1)} couple activité-compétence professionnelles</span>
               <span className="couple__code">{c.codeActivite}</span>
+              <span className="detail">Modifié : {dateModification(c.updatedAt)}</span>
               {onSupprimer && (
                 <button
                   type="button"

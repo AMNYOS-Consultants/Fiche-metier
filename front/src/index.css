@@ -141,6 +141,206 @@ h2 {
   color: var(--couleur-texte-doux);
 }
 
+/* Un niveau de la nomenclature dans le formulaire de création : chaque segment se choisit
+   ou se crée, les trois s'empilent en cascade. */
+.segment-nomenclature {
+  margin-top: 0.9rem;
+  padding-left: 0.9rem;
+  border-left: 2px solid var(--couleur-bordure);
+}
+.segment-nomenclature__lettre {
+  flex: none !important;
+  width: 3.5rem;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+/* `.liste-edition__ligne input` étire tous les champs (flex: 1) : sans ces exceptions, le
+   bouton radio s'étale et pousse le libellé hors de l'écran. */
+.segment-nomenclature .liste-edition__ligne {
+  flex-wrap: wrap;
+}
+.segment-nomenclature .liste-edition__ligne > input[type='radio'] {
+  flex: none;
+  width: auto;
+  padding: 0;
+  border: none;
+  margin: 0;
+}
+.segment-nomenclature .liste-edition__ligne > span {
+  flex: none;
+  white-space: nowrap;
+}
+.segment-nomenclature .liste-edition__ligne > select {
+  min-width: 18rem;
+}
+
+/* Bouton qui doit se lire comme un lien : action secondaire au fil du texte. */
+.lien-discret {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--couleur-accent);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.lien-discret:disabled {
+  color: var(--couleur-texte-doux);
+  cursor: default;
+}
+
+/* ---------- Encart des métiers portant une rédaction ---------- */
+
+.encart-metiers {
+  margin-top: 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--couleur-bordure);
+  border-left: 3px solid var(--couleur-accent);
+  border-radius: var(--rayon);
+  background: var(--couleur-accent-doux);
+}
+
+.encart-metiers__titre {
+  margin: 0 0 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--couleur-texte-doux);
+}
+.encart-metiers__titre:not(:first-child) {
+  margin-top: 0.9rem;
+}
+
+.encart-metiers__liste {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.encart-metiers__liste li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.editeur-dc {
+  margin-top: 0.9rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--couleur-bordure);
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  align-items: flex-start;
+}
+.editeur-dc .liste-edition {
+  width: 100%;
+}
+/* Le niveau est un choix court : il ne doit pas voler la place de l'intitulé du domaine,
+   qui est long (« Bonnes pratiques hygiène agroalimentaire ») et doit rester lisible. */
+.editeur-dc__niveau {
+  flex: none !important;
+  width: 9rem;
+}
+
+/* ---------- Accordéon Activités & compétences ---------- */
+
+.accordion-activites {
+  border: 1px solid var(--couleur-bordure);
+  border-radius: var(--rayon);
+  background: var(--couleur-surface);
+  overflow: hidden;
+}
+
+.accordion-activites__note {
+  margin: 0;
+  padding: 0.6rem 1rem;
+  background: var(--couleur-accent-doux);
+  color: var(--couleur-texte-doux);
+  font-size: 0.85rem;
+}
+
+.accordion-activites__lettre + .accordion-activites__lettre {
+  border-top: 1px solid var(--couleur-bordure);
+}
+
+/* Une seule règle pour les deux niveaux : la famille ne diffère que par son retrait. */
+.accordion-activites__entete {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.7rem 1rem;
+  background: none;
+  border: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.accordion-activites__entete:hover:not(:disabled) {
+  background: var(--couleur-fond);
+}
+.accordion-activites__entete:disabled {
+  cursor: default;
+}
+
+.accordion-activites__entete--famille {
+  padding-left: 2.25rem;
+  font-size: 0.95rem;
+}
+
+.accordion-activites__chevron {
+  flex: none;
+  width: 0.9rem;
+  color: var(--couleur-texte-doux);
+  font-size: 0.8rem;
+}
+
+.accordion-activites__titre {
+  flex: 1;
+}
+
+.accordion-activites__compte {
+  flex: none;
+  min-width: 2.5rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: var(--couleur-fond);
+  color: var(--couleur-texte-doux);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.accordion-activites__familles {
+  border-top: 1px solid var(--couleur-bordure);
+  background: var(--couleur-fond);
+}
+
+.accordion-activites__famille + .accordion-activites__famille {
+  border-top: 1px solid var(--couleur-bordure);
+}
+
+.accordion-activites__couples {
+  padding: 0 1rem 1rem 2.25rem;
+  background: var(--couleur-surface);
+}
+
+/* Le tableau vit à l'intérieur d'un accordéon : pas de marge propre, et des colonnes
+   resserrées pour laisser la place aux deux intitulés. */
+.tableau--couples {
+  margin: 0;
+}
+.tableau--couples th:first-child,
+.tableau--couples td:first-child {
+  width: 8rem;
+  white-space: nowrap;
+}
+
 /* ---------- Cartes ---------- */
 
 .grille {

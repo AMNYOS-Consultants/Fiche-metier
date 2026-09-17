@@ -1,6 +1,8 @@
-import { QueryTypes, Transaction } from 'sequelize';
+import { Op, QueryTypes, Transaction, UniqueConstraintError } from 'sequelize';
 import { sequelize } from '../database/connection';
 import {
+  Activite,
+  FamilleActivite,
   Metier,
   MetierActivite,
   ActiviteConnaissance,
@@ -8,6 +10,7 @@ import {
   CompetenceDetail,
   NiveauMaitrise,
   ActiviteMotCle,
+  Formacode,
 } from '../models';
 import { HttpError } from '../types/api';
 import { marquerProximitePerimee } from './passerelle.service';
@@ -242,5 +245,388 @@ export async function supprimerCouple(codeMetier: string, coupleId: number): Pro
     await resynchroniserNbCouple(codeMetier, transaction);
     await marquerProximitePerimee(codeMetier, transaction);
   });
+}
+
+export interface LigneConnaissance {
+  codeFormacode: string;
+  niveau: number | null;
+}
+
+/**
+ * Remplace les domaines de connaissance d'UN couple — ils pendent du couple, pas du code
+ * activité : deux métiers qui partagent un code portent chacun les leurs (voir l'en-tête
+ * de ce fichier).
+ *
+ * Les lignes conservées ne sont pas détruites puis recréées mais mises à jour : elles
+ * portent une durée, une justification et un NSF venus des classeurs, que la page d'édition
+ * ne saisit pas et qui seraient perdus par un remplacement sec. Seules les lignes retirées
+ * disparaissent, et les nouvelles héritent leur durée de `formacode_niveau` pour le niveau
+ * choisi (comme à l'import) plutôt que de rester vides sur la fiche métier.
+ *
+ * Périme les passerelles du métier : `comparerMetiers()` lit le couple (formacode, niveau)
+ * de `activite_connaissance` — le modifier change le degré d'élargissement.
+ */
+export async function modifierConnaissancesCouple(
+  codeActivite: string,
+  coupleId: number,
+  lignes: LigneConnaissance[],
+): Promise<ActiviteConnaissance[]> {
+  const couple = await MetierActivite.findOne({ where: { id: coupleId, codeActivite } });
+  if (!couple) throw HttpError.notFound(`Couple ${coupleId} sur l’activité ${codeActivite}`);
+
+  await sequelize.transaction(async (transaction) => {
+    await ecrireConnaissances(coupleId, lignes, transaction);
+    await marquerProximitePerimee(couple.codeMetier, transaction);
+  });
+
+  return ActiviteConnaissance.findAll({
+    where: { metierActiviteId: coupleId },
+    order: [['ordre', 'ASC']],
+  });
+}
+
+/**
+ * Écrit le jeu de domaines d'un couple dans une transaction en cours — partagé par
+ * l'édition et la création d'un couple. N'appelle pas `marquerProximitePerimee` :
+ * c'est à l'appelant de le faire, une seule fois pour son métier.
+ */
+async function ecrireConnaissances(
+  coupleId: number,
+  lignes: LigneConnaissance[],
+  transaction: Transaction,
+): Promise<void> {
+  const codes = lignes.map((l) => l.codeFormacode);
+  if (new Set(codes).size !== codes.length) {
+    throw HttpError.badRequest('Un même formacode est envoyé deux fois');
+  }
+
+  // Un code inconnu violerait la clé étrangère : le refuser ici donne un message utile.
+  const connus = await Formacode.findAll({
+    where: { codeFormacode: codes },
+    attributes: ['codeFormacode', 'intitule', 'codeNsf'],
+    transaction,
+  });
+  const parCode = new Map(connus.map((f) => [f.codeFormacode, f]));
+  const inconnus = codes.filter((c) => !parCode.has(c));
+  if (inconnus.length > 0) {
+    throw HttpError.badRequest(`Formacode(s) inconnu(s) : ${inconnus.join(', ')}`);
+  }
+
+  const existantes = await ActiviteConnaissance.findAll({
+    where: { metierActiviteId: coupleId },
+    transaction,
+  });
+  const existantesParCode = new Map(existantes.map((c) => [c.codeFormacode, c]));
+
+  for (const [index, ligne] of lignes.entries()) {
+    const ordre = index + 1;
+    const existante = existantesParCode.get(ligne.codeFormacode);
+
+    if (existante) {
+      await existante.update({ niveau: ligne.niveau, ordre }, { transaction });
+      continue;
+    }
+
+    const formacode = parCode.get(ligne.codeFormacode)!;
+    await ActiviteConnaissance.create(
+      {
+        metierActiviteId: coupleId,
+        codeFormacode: ligne.codeFormacode,
+        intitule: formacode.intitule,
+        niveau: ligne.niveau,
+        dureeHeures: await dureeDeReference(ligne.codeFormacode, ligne.niveau, transaction),
+        justificationDuree: null,
+        codeNsf: formacode.codeNsf,
+        estFondamental: false,
+        ordre,
+      },
+      { transaction },
+    );
+  }
+
+  const gardes = new Set(codes);
+  for (const existante of existantes) {
+    if (!gardes.has(existante.codeFormacode)) await existante.destroy({ transaction });
+  }
+}
+
+/**
+ * Durée de référence d'un (formacode, niveau) : la ligne `formacode_niveau` de l'origine la
+ * plus fiable, même priorité que `comparerMetiers()` et `chargerDureesParFormacodeNiveau()`.
+ */
+async function dureeDeReference(
+  codeFormacode: string,
+  niveau: number | null,
+  transaction: Transaction,
+): Promise<number | null> {
+  if (niveau === null) return null;
+
+  const [ligne] = await sequelize.query<{ dureeHeures: string | null }>(
+    `SELECT duree_heures AS dureeHeures
+       FROM formacode_niveau
+      WHERE code_formacode = :codeFormacode AND niveau = :niveau
+      ORDER BY CASE origine
+                 WHEN 'outil_fiche_metier' THEN 3
+                 WHEN 'base_formacodes' THEN 2
+                 WHEN 'base_competences' THEN 1
+                 ELSE 0
+               END DESC
+      LIMIT 1`,
+    { replacements: { codeFormacode, niveau }, type: QueryTypes.SELECT, transaction },
+  );
+
+  return ligne?.dureeHeures !== null && ligne?.dureeHeures !== undefined
+    ? Number(ligne.dureeHeures)
+    : null;
+}
+
+/**
+ * Où placer le nouveau couple dans la nomenclature `A.00.00.00`. Exactement une des trois
+ * formes, de la plus précise à la plus large :
+ *   - `halo` : le 3e segment existe, on ajoute une déclinaison (4e segment).
+ *   - `famille` : le 2e segment existe, on ajoute une activité (3e segment, déclinaison 01).
+ *   - `nouvelleFamille` : on crée le 2e segment, sous une lettre existante ou nouvelle.
+ */
+export interface EmplacementCouple {
+  famille?: string;
+  halo?: string;
+  nouvelleFamille?: {
+    lettre: string;
+    /** Requis seulement si la lettre est nouvelle : sinon il est repris de ses familles. */
+    domaine1?: string;
+    domaine2: string;
+    domaine3?: string;
+  };
+}
+
+export interface CreationCouple extends EmplacementCouple {
+  codeMetier: string;
+  intituleActivite: string;
+  intituleCompetence: string | null;
+  detailsActivite: string[];
+  detailsCompetence: string[];
+  niveauxMaitrise: Array<{ niveau: number; description: string }>;
+  connaissances: LigneConnaissance[];
+}
+
+/**
+ * Prochain numéro libre d'un segment : `MAX + 1`, jamais `COUNT + 1`.
+ * La numérotation porte des trous à tous les niveaux — la famille K.02 compte 71 activités
+ * mais son 3e segment va jusqu'à 77, et le halo K.01.03 compte 26 déclinaisons pour un 4e
+ * segment jusqu'à 29. Compter les lignes proposerait un code déjà pris.
+ */
+async function prochainSegment(
+  prefixe: string,
+  rang: 3 | 4,
+  transaction: Transaction,
+): Promise<string> {
+  const expression =
+    rang === 3
+      ? `SUBSTRING_INDEX(SUBSTRING_INDEX(code_activite, '.', 3), '.', -1)`
+      : `SUBSTRING_INDEX(code_activite, '.', -1)`;
+
+  const [{ maxSegment }] = await sequelize.query<{ maxSegment: number | null }>(
+    `SELECT MAX(CAST(${expression} AS UNSIGNED)) AS maxSegment
+       FROM activite
+      WHERE code_activite LIKE :prefixe`,
+    { replacements: { prefixe: `${prefixe}.%` }, type: QueryTypes.SELECT, transaction },
+  );
+
+  const suivant = (maxSegment ?? 0) + 1;
+  if (suivant > 99) {
+    throw HttpError.badRequest(
+      `${prefixe} est saturé (dernier numéro ${maxSegment}) : la nomenclature ne prévoit que deux chiffres par segment.`,
+    );
+  }
+  return String(suivant).padStart(2, '0');
+}
+
+/**
+ * Crée un couple activité-compétence de toutes pièces : une entrée de catalogue (`activite`)
+ * ET son rattachement à une fiche métier (`metier_activite`).
+ *
+ * Les deux vont ensemble par nécessité : `listerActivitesAjoutables()` ne propose que des
+ * codes déjà rédigés quelque part (jointure interne sur `metier_activite`), et
+ * `ajouterCouple()` recopie un couple existant. Une entrée de catalogue sans métier serait
+ * donc impossible à rattacher ensuite par l'interface.
+ *
+ * Le code est attribué, jamais saisi : `famille` donne une nouvelle activité
+ * (`I.02` -> `I.02.24.01`), `halo` une nouvelle déclinaison (`I.02.08` -> `I.02.08.24`).
+ */
+/**
+ * Crée la famille demandée et renvoie son code. Le 2e segment est attribué (`MAX + 1` parmi
+ * les familles de la lettre), jamais saisi — comme les autres segments.
+ *
+ * `domaine_1` est une donnée de la lettre, pas de la famille : il est constant sur toutes
+ * les familles d'une même lettre (vérifié sur les 39 entrées). On le reprend donc des
+ * familles existantes de la lettre, et on ne l'exige de l'appelant que pour une lettre neuve.
+ */
+async function creerFamille(
+  nouvelle: NonNullable<EmplacementCouple['nouvelleFamille']>,
+  transaction: Transaction,
+): Promise<string> {
+  const lettre = nouvelle.lettre.toUpperCase();
+  if (!/^[A-Z]$/.test(lettre)) {
+    throw HttpError.badRequest(`Lettre de domaine invalide : ${nouvelle.lettre} (A à Z attendu)`);
+  }
+
+  const soeurs = await FamilleActivite.findAll({
+    where: { codeFamilleActivite: { [Op.like]: `${lettre}.%` } },
+    transaction,
+  });
+
+  const domaine1 = soeurs.length > 0 ? soeurs[0].domaine1 : (nouvelle.domaine1?.trim() ?? '');
+  if (!domaine1) {
+    throw HttpError.badRequest(
+      `La lettre ${lettre} est nouvelle : son libellé de domaine d’activité 1 est requis.`,
+    );
+  }
+
+  const maxSegment = Math.max(
+    0,
+    ...soeurs.map((f) => Number(f.codeFamilleActivite.split('.')[1])),
+  );
+  if (maxSegment + 1 > 99) {
+    throw HttpError.badRequest(
+      `La lettre ${lettre} est saturée (dernière famille ${lettre}.${maxSegment}).`,
+    );
+  }
+
+  const code = `${lettre}.${String(maxSegment + 1).padStart(2, '0')}`;
+  await FamilleActivite.create(
+    {
+      codeFamilleActivite: code,
+      domaine1,
+      domaine2: nouvelle.domaine2,
+      domaine3: nouvelle.domaine3?.trim() || null,
+      // Aucun exemple de compétence contextualisée : la colonne ne vient que du classeur.
+      exempleCompetence: null,
+    },
+    { transaction },
+  );
+
+  return code;
+}
+
+export async function creerCoupleActivite(
+  donnees: CreationCouple,
+): Promise<{ codeActivite: string; coupleId: number }> {
+  const emplacements = [donnees.famille, donnees.halo, donnees.nouvelleFamille].filter(
+    (v) => v !== undefined,
+  );
+  if (emplacements.length !== 1) {
+    throw HttpError.badRequest(
+      'Indiquer un seul emplacement : une famille, un halo, ou une nouvelle famille.',
+    );
+  }
+
+  const metier = await Metier.findByPk(donnees.codeMetier, { attributes: ['codeMetier'] });
+  if (!metier) throw HttpError.notFound(`Métier ${donnees.codeMetier}`);
+
+  if (donnees.famille || donnees.halo) {
+    const codeFamille = donnees.famille ?? donnees.halo!.split('.').slice(0, 2).join('.');
+    const famille = await FamilleActivite.findByPk(codeFamille, {
+      attributes: ['codeFamilleActivite'],
+    });
+    if (!famille) throw HttpError.badRequest(`Famille d’activité inconnue : ${codeFamille}`);
+  }
+
+  if (donnees.halo) {
+    // Un halo n'existe que par les activités qui le portent : refuser d'en inventer un ici,
+    // c'est le rôle de `famille` (qui, lui, attribue un 3e segment neuf).
+    const existe = await MetierActivite.count({
+      where: { codeActivite: { [Op.like]: `${donnees.halo}.%` } },
+    });
+    if (existe === 0) {
+      throw HttpError.badRequest(
+        `Le halo ${donnees.halo} n’existe pas : créez plutôt une nouvelle activité dans sa famille.`,
+      );
+    }
+  }
+
+  try {
+    return await sequelize.transaction(async (transaction) => {
+      const codeFamille = donnees.nouvelleFamille
+        ? await creerFamille(donnees.nouvelleFamille, transaction)
+        : (donnees.famille ?? donnees.halo!.split('.').slice(0, 2).join('.'));
+
+      // Une famille neuve ne porte encore aucune activité : `prochainSegment` y renvoie 01.
+      const codeActivite = donnees.halo
+        ? `${donnees.halo}.${await prochainSegment(donnees.halo, 4, transaction)}`
+        : `${codeFamille}.${await prochainSegment(codeFamille, 3, transaction)}.01`;
+
+      await Activite.create(
+        {
+          codeActivite,
+          codeFamilleActivite: codeFamille,
+          intituleActivite: donnees.intituleActivite,
+          intituleCompetence: donnees.intituleCompetence,
+          // Aucun dossier source : ce couple ne vient d'aucun classeur de collecte.
+          dossierSourceId: null,
+        },
+        { transaction },
+      );
+
+      const [{ maxOrdre }] = await sequelize.query<{ maxOrdre: number | null }>(
+        `SELECT MAX(ordre) AS maxOrdre FROM metier_activite WHERE code_metier = :codeMetier`,
+        { replacements: { codeMetier: donnees.codeMetier }, type: QueryTypes.SELECT, transaction },
+      );
+
+      const couple = await MetierActivite.create(
+        {
+          codeMetier: donnees.codeMetier,
+          codeActivite,
+          ordre: (maxOrdre ?? 0) + 1,
+          intituleActivite: donnees.intituleActivite,
+          intituleCompetence: donnees.intituleCompetence,
+        },
+        { transaction },
+      );
+
+      await Promise.all([
+        ActiviteDetail.bulkCreate(
+          donnees.detailsActivite.map((libelle, i) => ({
+            metierActiviteId: couple.id,
+            libelle,
+            ordre: i + 1,
+          })),
+          { transaction },
+        ),
+        CompetenceDetail.bulkCreate(
+          donnees.detailsCompetence.map((libelle, i) => ({
+            metierActiviteId: couple.id,
+            libelle,
+            ordre: i + 1,
+          })),
+          { transaction },
+        ),
+        NiveauMaitrise.bulkCreate(
+          donnees.niveauxMaitrise.map((n) => ({
+            metierActiviteId: couple.id,
+            niveau: n.niveau,
+            description: n.description,
+          })),
+          { transaction },
+        ),
+      ]);
+
+      if (donnees.connaissances.length > 0) {
+        await ecrireConnaissances(couple.id, donnees.connaissances, transaction);
+      }
+
+      await resynchroniserNbCouple(donnees.codeMetier, transaction);
+      await marquerProximitePerimee(donnees.codeMetier, transaction);
+
+      return { codeActivite, coupleId: couple.id };
+    });
+  } catch (err) {
+    // Deux créations simultanées sur la même famille viseraient le même numéro.
+    if (err instanceof UniqueConstraintError) {
+      throw HttpError.conflict(
+        'Un autre code vient d’être créé au même emplacement : relancez l’opération.',
+      );
+    }
+    throw err;
+  }
 }
 

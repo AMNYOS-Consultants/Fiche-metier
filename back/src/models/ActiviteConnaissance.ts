@@ -24,6 +24,9 @@ export class ActiviteConnaissance extends Model<
   declare codeNsf: string | null;
   declare estFondamental: CreationOptional<boolean>;
   declare ordre: number;
+  /** `null` sur les lignes antérieures à la migration 012. */
+  declare createdAt: CreationOptional<Date | null>;
+  declare updatedAt: CreationOptional<Date | null>;
 }
 
 ActiviteConnaissance.init(
@@ -38,11 +41,13 @@ ActiviteConnaissance.init(
     codeNsf: { type: DataTypes.STRING(10), allowNull: true },
     estFondamental: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     ordre: { type: DataTypes.TINYINT, allowNull: false },
+    createdAt: { type: DataTypes.DATE, allowNull: true },
+    updatedAt: { type: DataTypes.DATE, allowNull: true },
   },
   {
     sequelize,
     tableName: 'activite_connaissance',
-    timestamps: false,
+    timestamps: true,
     indexes: [
       { unique: true, fields: ['metier_activite_id', 'code_formacode'] },
       { fields: ['code_formacode', 'niveau'] },

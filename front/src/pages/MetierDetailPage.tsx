@@ -34,7 +34,7 @@ import { CouplesFiche } from '@/components/CouplesFiche';
 import { AjoutCouple } from '@/components/AjoutCouple';
 import { ConnaissancesFiche } from '@/components/ConnaissancesFiche';
 import { FiltresPasserelles } from '@/components/FiltresPasserelles';
-import { libelleFamille } from '@/utils/format';
+import { dateModification, libelleFamille } from '@/utils/format';
 import type { MetierTransversale, MetierCondition } from '@/types/api';
 
 export function MetierDetailPage() {
@@ -496,6 +496,10 @@ export function MetierDetailPage() {
             {m.redacteur && <li className="badge badge--dossier">Rédacteur : {m.redacteur}</li>}
           </ul>
         )}
+        <p className="detail">
+          Fiche créée le {dateModification(m.createdAt)} · modifiée le{' '}
+          {dateModification(m.updatedAt)}
+        </p>
         {erreurEnregistrement && <ErrorMessage message={erreurEnregistrement} />}
         {erreurSuppression && <ErrorMessage message={erreurSuppression} />}
 
@@ -845,14 +849,24 @@ export function MetierDetailPage() {
           <h2>Activités et compétences du métier</h2>
           <div className="fiche__entete-boutons">
             {modeEditionCouples && (
-              <button
-                type="button"
-                className="bouton--secondaire"
-                onClick={() => setAjoutOuvert((ouvert) => !ouvert)}
-                disabled={ajoutEnCours}
-              >
-                {ajoutOuvert ? 'Masquer l’ajout' : 'Ajouter un couple'}
-              </button>
+              <>
+                <button
+                  type="button"
+                  className="bouton--secondaire"
+                  onClick={() => setAjoutOuvert((ouvert) => !ouvert)}
+                  disabled={ajoutEnCours}
+                >
+                  {ajoutOuvert ? 'Masquer l’ajout' : 'Ajouter un couple'}
+                </button>
+                {/* « Ajouter » ne propose que des codes déjà rédigés ailleurs : créer part
+                    d'un code neuf, attribué dans la nomenclature. */}
+                <Link
+                  to={`/activites/nouveau?metier=${encodeURIComponent(m.codeMetier)}`}
+                  className="bouton--secondaire"
+                >
+                  Créer un couple
+                </Link>
+              </>
             )}
             <button
               type="button"

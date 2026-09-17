@@ -53,6 +53,42 @@ describe('Passerelles', () => {
     expect(new Set(codes).size).toBe(codes.length);
   });
 
+  it('aucun domaine ne rend d’heures : le plancher à 0 du classeur de référence', async () => {
+    // Régression : une durée de niveau cible non documentée vaut 0, et la soustraction de la
+    // durée du niveau détenu produisait un crédit négatif qui effaçait des heures réelles
+    // (cas P232 -> H276 : -230,70 h sur le formacode 35071, exigé au niveau 3 alors que le
+    // référentiel ne documente que les niveaux 1 et 2). Le classeur de référence, lui, masque
+    // toute différence négative.
+    const paires = [
+      [codeA, codeB],
+      [codeB, codeA],
+    ];
+
+    for (const [source, cible] of paires) {
+      const res = await agent
+        .get(`/api/passerelles/${encodeURIComponent(source)}/vers/${encodeURIComponent(cible)}`)
+        .expect(200);
+
+      for (const e of res.body.ecarts) {
+        expect(Number(e.heuresAcquerir)).toBeGreaterThanOrEqual(0);
+      }
+      // Le total est exactement la somme des lignes : plus rien ne se compense.
+      const somme = res.body.ecarts.reduce(
+        (s: number, e: { heuresAcquerir: number }) => s + Number(e.heuresAcquerir),
+        0,
+      );
+      expect(res.body.totalHeures).toBeCloseTo(somme, 2);
+      expect(res.body.totalHeures).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('le tableau précalculé ne porte aucune durée négative', async () => {
+    const res = await agent.get(`/api/passerelles/${encodeURIComponent(codeA)}/proches?limite=350`).expect(200);
+    for (const m of res.body.data) {
+      expect(Number(m.dureeAcquisitionHeures ?? 0)).toBeGreaterThanOrEqual(0);
+    }
+  });
+
   it('404 en comparant avec un métier cible inconnu', async () => {
     await agent.get(`/api/passerelles/${encodeURIComponent(codeA)}/vers/CODE-INEXISTANT-XYZ`).expect(404);
   });

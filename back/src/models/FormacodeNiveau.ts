@@ -23,6 +23,9 @@ export class FormacodeNiveau extends Model<
   declare methodeCalcul: string | null;
   declare source: string | null;
   declare origine: OrigineFormacode;
+  /** `null` sur les lignes antérieures à la migration 012. */
+  declare createdAt: CreationOptional<Date | null>;
+  declare updatedAt: CreationOptional<Date | null>;
 }
 
 FormacodeNiveau.init(
@@ -40,11 +43,13 @@ FormacodeNiveau.init(
       type: DataTypes.ENUM('base_formacodes', 'base_competences', 'outil_fiche_metier'),
       allowNull: false,
     },
+    createdAt: { type: DataTypes.DATE, allowNull: true },
+    updatedAt: { type: DataTypes.DATE, allowNull: true },
   },
   {
     sequelize,
     tableName: 'formacode_niveau',
-    timestamps: false,
+    timestamps: true,
     indexes: [{ unique: true, fields: ['code_formacode', 'niveau', 'origine'] }],
   },
 );

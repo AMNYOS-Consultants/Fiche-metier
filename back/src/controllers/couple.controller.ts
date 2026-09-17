@@ -7,6 +7,7 @@ import {
   listerVariantes,
   ajouterCouple,
   supprimerCouple,
+  creerCoupleActivite,
 } from '../services/couple.service';
 import { recalculerProximites, etatProximites } from '../services/passerelle.service';
 
@@ -56,6 +57,63 @@ export async function ajouter(req: Request<{ code: string }>, res: Response): Pr
   const { coupleSourceId } = schemaAjout.parse(req.body);
   const couple = await ajouterCouple(req.params.code, coupleSourceId);
   res.status(201).json(couple);
+}
+
+const CODE_FAMILLE = /^[A-Z]\.\d{2}$/;
+const CODE_HALO = /^[A-Z]\.\d{2}\.\d{2}$/;
+
+const schemaCreation = z
+  .object({
+    codeMetier: z.string().trim().min(1).max(10),
+    /** Un seul emplacement : famille -> nouvelle activité, halo -> nouvelle déclinaison. */
+    famille: z.string().trim().regex(CODE_FAMILLE).optional(),
+    halo: z.string().trim().regex(CODE_HALO).optional(),
+    /** Crée le 2e segment, sous une lettre existante ou nouvelle. */
+    nouvelleFamille: z
+      .object({
+        lettre: z.string().trim().regex(/^[A-Za-z]$/),
+        domaine1: z.string().trim().min(1).max(255).optional(),
+        domaine2: z.string().trim().min(1).max(255),
+        domaine3: z.string().trim().max(2000).optional(),
+      })
+      .optional(),
+    intituleActivite: z.string().trim().min(1).max(500),
+    intituleCompetence: z.string().trim().max(500).nullable(),
+    detailsActivite: z.array(z.string().trim().min(1).max(500)).max(9),
+    detailsCompetence: z.array(z.string().trim().min(1).max(500)).max(9),
+    niveauxMaitrise: z
+      .array(
+        z.object({
+          niveau: z.number().int().min(1).max(4),
+          description: z.string().trim().min(1).max(1000),
+        }),
+      )
+      .max(4),
+    connaissances: z
+      .array(
+        z.object({
+          codeFormacode: z.string().trim().min(1).max(10),
+          niveau: z.number().int().min(1).max(4).nullable(),
+        }),
+      )
+      .max(20),
+  })
+  .refine(
+    (d) =>
+      [d.famille, d.halo, d.nouvelleFamille].filter((v) => v !== undefined).length === 1,
+    {
+      message: 'Indiquer un seul emplacement : une famille, un halo, ou une nouvelle famille.',
+    },
+  );
+
+/**
+ * POST /api/activites — crée un couple activité-compétence de toutes pièces : l'entrée de
+ * catalogue et son rattachement à une fiche métier. Le code est attribué par le serveur.
+ */
+export async function creer(req: Request, res: Response): Promise<void> {
+  const donnees = schemaCreation.parse(req.body);
+  const resultat = await creerCoupleActivite(donnees);
+  res.status(201).json(resultat);
 }
 
 /** DELETE /api/metiers/:code/couples/:id */

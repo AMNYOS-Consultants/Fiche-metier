@@ -1,10 +1,18 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { obtenirVariantes, harmoniserCouple } from '@/api/activites';
+import { obtenirVariantes, harmoniserCouple, scinderVariante } from '@/api/activites';
 import { ApiError } from '@/api/client';
 import { useFetch } from '@/hooks/useFetch';
 import { Loader } from '@/components/Loader';
 import { ErrorMessage } from '@/components/ErrorMessage';
+import { EditeurConnaissances } from '@/components/EditeurConnaissances';
+import {
+  FormulaireRedaction,
+  redactionDepuis,
+  versEditionModele,
+  type Redaction,
+} from '@/components/FormulaireRedaction';
+import { dateModification } from '@/utils/format';
 import type { VarianteDetaillee } from '@/types/api';
 
 function Details({ items }: { items: string[] }) {
@@ -18,44 +26,21 @@ function Details({ items }: { items: string[] }) {
   );
 }
 
-interface Edition {
-  intituleActivite: string;
-  intituleCompetence: string;
-  /** Une ligne de texte = un détail ; découpé au moment d'appliquer. */
-  detailsActivite: string;
-  detailsCompetence: string;
-  /** Index 0..3 = niveaux 1..4 ; case vide = niveau non retenu. */
-  niveaux: [string, string, string, string];
-}
-
-function editionDepuis(v: VarianteDetaillee): Edition {
-  const niveaux: [string, string, string, string] = ['', '', '', ''];
-  for (const n of v.niveauxMaitrise) {
-    if (n.niveau >= 1 && n.niveau <= 4) niveaux[n.niveau - 1] = n.description;
-  }
-  return {
-    intituleActivite: v.intituleActivite ?? '',
-    intituleCompetence: v.intituleCompetence ?? '',
-    detailsActivite: v.detailsActivite.join('\n'),
-    detailsCompetence: v.detailsCompetence.join('\n'),
-    niveaux,
-  };
-}
-
-function lignes(texte: string): string[] {
-  return texte
-    .split('\n')
-    .map((l) => l.trim())
-    .filter(Boolean);
+/** `I.02.08.01` -> `I.02.08` : le halo dans lequel un nouveau code serait créé. */
+function halo(codeActivite: string): string {
+  return codeActivite.split('.').slice(0, 3).join('.');
 }
 
 export function IncoherenceDetailPage() {
   const { code = '' } = useParams();
   const [recharger, setRecharger] = useState(0);
   const [selectionneId, setSelectionneId] = useState<number | null>(null);
-  const [edition, setEdition] = useState<Edition | null>(null);
-  const [applicationEnCours, setApplicationEnCours] = useState(false);
+  const [edition, setEdition] = useState<Redaction | null>(null);
+  /** Couple dont on édite les domaines de connaissance (indépendant de la rédaction). */
+  const [dcCoupleId, setDcCoupleId] = useState<number | null>(null);
+  const [actionEnCours, setActionEnCours] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
+  const [succes, setSucces] = useState<string | null>(null);
 
   const variantes = useFetch((signal) => obtenirVariantes(code, signal), [code, recharger]);
 
@@ -71,9 +56,16 @@ export function IncoherenceDetailPage() {
       setEdition(null);
     } else {
       setSelectionneId(v.coupleModeleId);
-      setEdition(editionDepuis(v));
+      setEdition(redactionDepuis(v));
     }
+    setDcCoupleId(null);
     setErreur(null);
+    setSucces(null);
+  }
+
+  /** La rédaction en cours d'édition, au format attendu par l'API. */
+  function editionAEnvoyer() {
+    return edition ? versEditionModele(edition) : undefined;
   }
 
   async function appliquer() {
@@ -88,25 +80,53 @@ export function IncoherenceDetailPage() {
     ) {
       return;
     }
-    setApplicationEnCours(true);
+    setActionEnCours(true);
     setErreur(null);
+    setSucces(null);
     try {
-      await harmoniserCouple(code, selectionnee.coupleModeleId, {
-        intituleActivite: edition.intituleActivite.trim() || null,
-        intituleCompetence: edition.intituleCompetence.trim() || null,
-        detailsActivite: lignes(edition.detailsActivite),
-        detailsCompetence: lignes(edition.detailsCompetence),
-        niveauxMaitrise: edition.niveaux
-          .map((description, i) => ({ niveau: i + 1, description: description.trim() }))
-          .filter((n) => n.description.length > 0),
-      });
+      await harmoniserCouple(code, selectionnee.coupleModeleId, editionAEnvoyer());
       setSelectionneId(null);
       setEdition(null);
       setRecharger((v) => v + 1);
     } catch (err) {
       setErreur(err instanceof ApiError ? err.message : 'Application impossible');
     } finally {
-      setApplicationEnCours(false);
+      setActionEnCours(false);
+    }
+  }
+
+  /**
+   * L'autre issue : cette rédaction décrit en fait une autre activité — on la détache vers
+   * un nouveau code du même halo plutôt que de l'aligner sur les autres.
+   */
+  async function creerCouple() {
+    if (!selectionnee || !edition) return;
+    const nbRestants = totalMetiers - selectionnee.metiers.length;
+    if (
+      !window.confirm(
+        `Créer un nouveau couple dans le halo ${halo(code)} à partir de cette rédaction ? ` +
+          `Le ou les ${selectionnee.metiers.length} métier(s) qui la portent basculeront sur ce ` +
+          `nouveau code, avec leurs détails et domaines de connaissance. ${code} restera porté ` +
+          `par les ${nbRestants} autre(s) métier(s). Cette action est définitive.`,
+      )
+    ) {
+      return;
+    }
+    setActionEnCours(true);
+    setErreur(null);
+    setSucces(null);
+    try {
+      const resultat = await scinderVariante(code, selectionnee.coupleModeleId, editionAEnvoyer());
+      setSucces(
+        `Couple ${resultat.codeActivite} créé : ${resultat.nbMetiersDeplaces} métier(s) y ont été déplacés.`,
+      );
+      setSelectionneId(null);
+      setEdition(null);
+      setRecharger((v) => v + 1);
+    } catch (err) {
+      setErreur(err instanceof ApiError ? err.message : 'Création impossible');
+    } finally {
+      setActionEnCours(false);
     }
   }
 
@@ -118,11 +138,15 @@ export function IncoherenceDetailPage() {
       <h1>{code}</h1>
       <p className="fiche__famille">
         Choisissez d’abord une rédaction (« Partir de cette description »), modifiez-la si
-        besoin, puis appliquez-la à tous les métiers concernés — une confirmation est demandée
-        avant toute écriture. Les domaines de connaissance ne sont pas modifiables ici : ils
-        sont repris tels quels de la rédaction choisie.
+        besoin, puis choisissez l’issue : <strong>l’appliquer à tous</strong> les métiers qui
+        portent {code}, ou <strong>créer un couple</strong> — la rédaction est alors détachée
+        vers un nouveau code du halo {halo(code)}, ce qui convient quand la divergence est
+        légitime (deux métiers ne décrivent pas la même activité). Une confirmation est
+        demandée avant toute écriture. Les domaines de connaissance s’éditent séparément,
+        métier par métier, dans l’encart de chaque rédaction.
       </p>
 
+      {succes && <p className="bandeau-alerte">{succes}</p>}
       {erreur && <ErrorMessage message={erreur} />}
       {variantes.erreur && <ErrorMessage message={variantes.erreur} />}
       {variantes.chargement && <Loader />}
@@ -130,9 +154,8 @@ export function IncoherenceDetailPage() {
       {selectionnee && edition && (
         <div className="bandeau-alerte">
           <span>
-            Rédaction retenue : « {edition.intituleActivite || 'Sans intitulé'} ». Elle sera
-            appliquée aux {totalMetiers} métiers qui portent {code} (actuellement portée par{' '}
-            {selectionnee.metiers.length}).
+            Rédaction retenue : « {edition.intituleActivite || 'Sans intitulé'} », portée par{' '}
+            {selectionnee.metiers.length} des {totalMetiers} métiers qui portent {code}.
           </span>
           <div className="fiche__entete-boutons">
             <button
@@ -142,17 +165,26 @@ export function IncoherenceDetailPage() {
                 setSelectionneId(null);
                 setEdition(null);
               }}
-              disabled={applicationEnCours}
+              disabled={actionEnCours}
             >
               Annuler la sélection
             </button>
             <button
               type="button"
+              className="bouton--secondaire"
+              onClick={creerCouple}
+              disabled={actionEnCours}
+              title={`Détache cette rédaction vers un nouveau code du halo ${halo(code)}`}
+            >
+              {actionEnCours ? 'En cours…' : 'Créer un couple'}
+            </button>
+            <button
+              type="button"
               className="bouton--export"
               onClick={appliquer}
-              disabled={applicationEnCours}
+              disabled={actionEnCours}
             >
-              {applicationEnCours ? 'Application…' : 'Appliquer à tous'}
+              {actionEnCours ? 'En cours…' : 'Appliquer à tous'}
             </button>
           </div>
         </div>
@@ -177,105 +209,19 @@ export function IncoherenceDetailPage() {
                     type="button"
                     className={estSelectionnee ? 'bouton--export' : 'bouton--secondaire'}
                     onClick={() => choisir(v)}
-                    disabled={applicationEnCours}
+                    disabled={actionEnCours}
                   >
                     {estSelectionnee ? 'Sélectionnée ✓' : 'Partir de cette description'}
                   </button>
                 </div>
 
-                <p className="detail">
-                  Portée par {v.metiers.length} métier(s) : {v.metiers.map((m) => m.intitule).join(', ')}
-                </p>
-
                 {estSelectionnee && edition ? (
-                  <div className="edition-couple">
-                    <div className="passerelles-champ">
-                      <label htmlFor={`ia-${v.coupleModeleId}`}>Intitulé de l’activité</label>
-                      <input
-                        id={`ia-${v.coupleModeleId}`}
-                        type="text"
-                        className="edition__texte"
-                        value={edition.intituleActivite}
-                        onChange={(e) => setEdition((s) => s && { ...s, intituleActivite: e.target.value })}
-                      />
-                    </div>
-                    <div className="passerelles-champ">
-                      <label htmlFor={`ic-${v.coupleModeleId}`}>Intitulé de la compétence</label>
-                      <input
-                        id={`ic-${v.coupleModeleId}`}
-                        type="text"
-                        className="edition__texte"
-                        value={edition.intituleCompetence}
-                        onChange={(e) => setEdition((s) => s && { ...s, intituleCompetence: e.target.value })}
-                      />
-                    </div>
-
-                    <div className="edition-couple__details">
-                      <div className="passerelles-champ">
-                        <label htmlFor={`da-${v.coupleModeleId}`}>
-                          Détails de l’activité (un détail par ligne)
-                        </label>
-                        <textarea
-                          id={`da-${v.coupleModeleId}`}
-                          className="edition__texte"
-                          rows={6}
-                          value={edition.detailsActivite}
-                          onChange={(e) => setEdition((s) => s && { ...s, detailsActivite: e.target.value })}
-                        />
-                      </div>
-                      <div className="passerelles-champ">
-                        <label htmlFor={`dc-${v.coupleModeleId}`}>
-                          Détails de la compétence (un détail par ligne)
-                        </label>
-                        <textarea
-                          id={`dc-${v.coupleModeleId}`}
-                          className="edition__texte"
-                          rows={6}
-                          value={edition.detailsCompetence}
-                          onChange={(e) => setEdition((s) => s && { ...s, detailsCompetence: e.target.value })}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="passerelles-champ">
-                      <label>Niveaux de maîtrise (laisser vide si non retenu)</label>
-                      <div className="edition-couple__niveaux">
-                        {([0, 1, 2, 3] as const).map((i) => (
-                          <div key={i} className="passerelles-champ">
-                            <label htmlFor={`nm-${v.coupleModeleId}-${i}`} className="detail">
-                              Niveau {i + 1}
-                            </label>
-                            <textarea
-                              id={`nm-${v.coupleModeleId}-${i}`}
-                              className="edition__texte"
-                              rows={2}
-                              value={edition.niveaux[i]}
-                              onChange={(e) =>
-                                setEdition((s) => {
-                                  if (!s) return s;
-                                  const niveaux = [...s.niveaux] as Edition['niveaux'];
-                                  niveaux[i] = e.target.value;
-                                  return { ...s, niveaux };
-                                })
-                              }
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {v.connaissances.length > 0 && (
-                      <p className="detail">
-                        Domaines de connaissance (repris tels quels) :{' '}
-                        {v.connaissances
-                          .map(
-                            (c) =>
-                              `${c.intitule ?? c.codeFormacode}${c.niveau !== null ? ` (niv. ${c.niveau})` : ''}`,
-                          )
-                          .join(', ')}
-                      </p>
-                    )}
-                  </div>
+                  <FormulaireRedaction
+                    redaction={edition}
+                    onChange={setEdition}
+                    idPrefix={`inc-${v.coupleModeleId}`}
+                    desactive={actionEnCours}
+                  />
                 ) : (
                   <>
                     <table className="tableau couple__table">
@@ -303,20 +249,64 @@ export function IncoherenceDetailPage() {
                         {v.niveauxMaitrise.map((n) => `${n.niveau}. ${n.description}`).join(' — ')}
                       </p>
                     )}
-
-                    {v.connaissances.length > 0 && (
-                      <p className="detail">
-                        Domaines de connaissance :{' '}
-                        {v.connaissances
-                          .map(
-                            (c) =>
-                              `${c.intitule ?? c.codeFormacode}${c.niveau !== null ? ` (niv. ${c.niveau})` : ''}`,
-                          )
-                          .join(', ')}
-                      </p>
-                    )}
                   </>
                 )}
+
+                <div className="encart-metiers">
+                  <p className="encart-metiers__titre">
+                    Domaines de connaissance
+                    {v.connaissances.length === 0 && ' — aucun'}
+                  </p>
+                  {v.connaissances.length > 0 && (
+                    <ul className="badges">
+                      {v.connaissances.map((c) => (
+                        <li key={c.codeFormacode} className="badge">
+                          {c.intitule ?? c.codeFormacode}
+                          {c.niveau !== null && ` (niv. ${c.niveau})`}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  <p className="encart-metiers__titre">
+                    Portée par {v.metiers.length} métier{v.metiers.length > 1 ? 's' : ''}
+                  </p>
+                  <ul className="encart-metiers__liste">
+                    {v.metiers.map((m) => (
+                      <li key={m.coupleId}>
+                        <Link to={`/metiers/${encodeURIComponent(m.codeMetier)}`}>
+                          {m.intitule} <span className="detail">({m.codeMetier})</span>
+                        </Link>
+                        <span className="detail">Modifié : {dateModification(m.modifieLe)}</span>
+                        {dcCoupleId !== m.coupleId && (
+                          <button
+                            type="button"
+                            className="lien-discret"
+                            onClick={() => setDcCoupleId(m.coupleId)}
+                            disabled={actionEnCours}
+                          >
+                            Modifier ses domaines
+                          </button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+
+                  {v.metiers.some((m) => m.coupleId === dcCoupleId) && (
+                    <EditeurConnaissances
+                      codeActivite={code}
+                      coupleId={dcCoupleId!}
+                      connaissances={v.connaissances}
+                      onEnregistre={() => {
+                        setDcCoupleId(null);
+                        setSelectionneId(null);
+                        setEdition(null);
+                        setRecharger((n) => n + 1);
+                      }}
+                      onAnnule={() => setDcCoupleId(null)}
+                    />
+                  )}
+                </div>
               </section>
             );
           })

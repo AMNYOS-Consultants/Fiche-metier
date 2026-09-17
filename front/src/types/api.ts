@@ -101,6 +101,9 @@ export interface Metier {
   conditions?: MetierCondition[];
   transversales?: MetierTransversale[];
   acces?: MetierAcces[];
+  /** Horodatage ISO. `null` pour les lignes antérieures à la migration 012. */
+  createdAt?: string | null;
+  updatedAt?: string | null;
 }
 
 export interface Formacode {
@@ -112,6 +115,9 @@ export interface Formacode {
   niveaux?: FormacodeNiveau[];
   /** Uniquement sur GET /formacodes/:code — les métiers qui portent ce formacode. */
   metiers?: FormacodeMetier[];
+  /** Horodatage ISO. `null` pour les lignes antérieures à la migration 012. */
+  createdAt?: string | null;
+  updatedAt?: string | null;
 }
 
 export interface FormacodeMetier {
@@ -144,6 +150,9 @@ export interface ActiviteConnaissance {
   estFondamental: boolean;
   ordre: number;
   formacode?: Formacode;
+  /** Horodatage ISO. `null` pour les lignes antérieures à la migration 012. */
+  createdAt?: string | null;
+  updatedAt?: string | null;
 }
 
 export interface Detail {
@@ -171,6 +180,9 @@ export interface Couple {
   connaissances?: ActiviteConnaissance[];
   /** Présent quand le couple est vu depuis l'activité et non depuis le métier. */
   metier?: { codeMetier: string; intitule: string; codeFamille: string | null };
+  /** Horodatage ISO. `null` pour les lignes antérieures à la migration 012. */
+  createdAt?: string | null;
+  updatedAt?: string | null;
 }
 
 /**
@@ -198,6 +210,19 @@ export interface FamilleActivite {
   domaine2: string | null;
   domaine3: string | null;
   exempleCompetence: string | null;
+}
+
+/**
+ * Famille telle que servie par `/activites/familles` : sans l'exemple de compétence, mais
+ * avec le nombre de couples qu'elle porte. Les familles sans aucune activité en sont
+ * absentes (voir le contrôleur).
+ */
+export interface FamilleActiviteComptee {
+  codeFamilleActivite: string;
+  domaine1: string | null;
+  domaine2: string | null;
+  domaine3: string | null;
+  nbActivites: number;
 }
 
 /** Ligne du tableau « Domaines de connaissances structurant pour l'exercice du métier ». */
@@ -299,7 +324,14 @@ export interface EditionModele {
 /** Une rédaction distincte d'un code activité, et les métiers qui la portent. */
 export interface VarianteDetaillee {
   coupleModeleId: number;
-  metiers: Array<{ codeMetier: string; intitule: string }>;
+  /** `coupleId` sert à éditer les domaines de connaissance, qui pendent du couple. */
+  metiers: Array<{
+    coupleId: number;
+    codeMetier: string;
+    intitule: string;
+    /** Dernière modification de la rédaction de ce couple. */
+    modifieLe?: string | null;
+  }>;
   intituleActivite: string | null;
   intituleCompetence: string | null;
   detailsActivite: string[];

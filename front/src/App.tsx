@@ -3,6 +3,7 @@ import { Layout } from '@/components/Layout';
 import { HomePage } from '@/pages/HomePage';
 import { MetiersPage } from '@/pages/MetiersPage';
 import { NouveauMetierPage } from '@/pages/NouveauMetierPage';
+import { NouveauCouplePage } from '@/pages/NouveauCouplePage';
 import { MetierDetailPage } from '@/pages/MetierDetailPage';
 import { ActivitesPage } from '@/pages/ActivitesPage';
 import { ActiviteDetailPage } from '@/pages/ActiviteDetailPage';
@@ -34,6 +35,8 @@ export function App() {
             <Route path="metiers/nouveau" element={<NouveauMetierPage />} />
             <Route path="metiers/:code" element={<MetierDetailPage />} />
             <Route path="activites" element={<ActivitesPage />} />
+            {/* Avant `activites/:code` : sinon `nouveau` serait pris pour un code activité. */}
+            <Route path="activites/nouveau" element={<NouveauCouplePage />} />
             <Route path="activites/incoherences" element={<IncoherencesPage />} />
             <Route path="activites/incoherences/:code" element={<IncoherenceDetailPage />} />
             <Route path="activites/:code" element={<ActiviteDetailPage />} />

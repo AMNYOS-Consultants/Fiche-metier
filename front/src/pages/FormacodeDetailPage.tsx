@@ -6,6 +6,7 @@ import { ApiError } from '@/api/client';
 import { useFetch } from '@/hooks/useFetch';
 import { Loader } from '@/components/Loader';
 import { ErrorMessage } from '@/components/ErrorMessage';
+import { dateModification } from '@/utils/format';
 import type { FormacodeNiveau } from '@/types/api';
 
 type OrigineFormacode = 'base_formacodes' | 'base_competences' | 'outil_fiche_metier';
@@ -199,6 +200,7 @@ export function FormacodeDetailPage() {
             {f.nsf.libelle ? ` — ${f.nsf.libelle}` : ''}
           </p>
         )}
+        <p className="detail">Modifié : {dateModification(f.updatedAt)}</p>
       </header>
 
       <section className="fiche__section">

@@ -162,7 +162,18 @@ export async function comparerMetiers(
             c.niveau         AS niveauCible,
             CASE
               WHEN s.niveau IS NOT NULL AND s.niveau >= c.niveau THEN 0
-              ELSE COALESCE(fn_cible.duree_heures, 0) - COALESCE(fn_source.duree_heures, 0)
+              -- GREATEST(…, 0) reproduit le masque du classeur de référence
+              -- (Outil_passerelles_062026.xlsx, feuille « Différence formation ») :
+              --   SUMPRODUCT((D_cible > D_source) * (D_cible - D_source))
+              -- Le facteur booléen y annule toute différence négative. Sans ce plancher,
+              -- un niveau cible dont la durée n'est pas documentée (17 couples
+              -- (formacode, niveau) dans ce cas) vaut 0 par COALESCE, et l'on soustrait
+              -- alors la durée du niveau détenu : le domaine devient un crédit qui efface
+              -- des heures réelles ailleurs dans le total.
+              ELSE GREATEST(
+                     COALESCE(fn_cible.duree_heures, 0) - COALESCE(fn_source.duree_heures, 0),
+                     0
+                   )
             END AS heuresAcquerir
        FROM dc_cible c
        JOIN formacode f ON f.code_formacode = c.code_formacode
@@ -284,7 +295,10 @@ function calculerEcartConnaissances(
     const dureeCible = dureeParFormacodeNiveau.get(`${codeFormacode}|${niveauCible}`) ?? 0;
     const dureeSource =
       niveauSource !== null ? (dureeParFormacodeNiveau.get(`${codeFormacode}|${niveauSource}`) ?? 0) : 0;
-    dureeAcquisitionHeures += dureeCible - dureeSource;
+    // Plancher à 0, comme `comparerMetiers()` et comme le masque du classeur de référence :
+    // une durée cible non documentée vaut 0 ici, et sans ce plancher on soustrairait la
+    // durée du niveau détenu, transformant le domaine en crédit.
+    dureeAcquisitionHeures += Math.max(0, dureeCible - dureeSource);
   }
 
   return { nbDcCommuns, dureeAcquisitionHeures };

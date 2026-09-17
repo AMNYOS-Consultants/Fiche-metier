@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { Op, WhereOptions, InferAttributes } from 'sequelize';
+import { Op, WhereOptions, InferAttributes, QueryTypes } from 'sequelize';
 import { sequelize } from '../database/connection';
 import {
   Activite,
@@ -16,6 +16,37 @@ import {
 } from '../models';
 import { HttpError } from '../types/api';
 import { lirePagination, construireReponsePaginee } from '../middlewares/pagination';
+
+/**
+ * GET /api/activites/familles — l'arborescence de la page « Activités & compétences » :
+ * les familles de la nomenclature, avec le nombre d'activités que chacune porte.
+ *
+ * Jointure interne volontaire : 5 des 39 familles de `nomencl_FAMACTIVITES` ne sont citées
+ * par aucune activité (A.02 « Investigation », B.03 « Modelage », D.06, D.07, F.03). Les
+ * lister donnerait des sections vides à déplier.
+ */
+export async function listerFamillesActivite(_req: Request, res: Response): Promise<void> {
+  const familles = await sequelize.query<{
+    codeFamilleActivite: string;
+    domaine1: string | null;
+    domaine2: string | null;
+    domaine3: string | null;
+    nbActivites: number;
+  }>(
+    `SELECT fa.code_famille_activite AS codeFamilleActivite,
+            fa.domaine_1             AS domaine1,
+            fa.domaine_2             AS domaine2,
+            fa.domaine_3             AS domaine3,
+            COUNT(*)                 AS nbActivites
+       FROM famille_activite fa
+       JOIN activite a ON a.code_famille_activite = fa.code_famille_activite
+      GROUP BY fa.code_famille_activite, fa.domaine_1, fa.domaine_2, fa.domaine_3
+      ORDER BY fa.code_famille_activite ASC`,
+    { type: QueryTypes.SELECT },
+  );
+
+  res.json({ data: familles });
+}
 
 /** GET /api/activites?search=&famille=&formacode=&page=&limit= */
 export async function listerActivites(req: Request, res: Response): Promise<void> {

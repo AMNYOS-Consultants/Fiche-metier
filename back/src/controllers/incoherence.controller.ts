@@ -1,6 +1,14 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
-import { listerIncoherences, obtenirVariantes, harmoniserCouple } from '../services/incoherence.service';
+import { HttpError } from '../types/api';
+import {
+  listerIncoherences,
+  obtenirVariantes,
+  harmoniserCouple,
+  scinderVariante,
+  modifierRedactionVariante,
+} from '../services/incoherence.service';
+import { modifierConnaissancesCouple } from '../services/couple.service';
 
 /** GET /api/activites/incoherences */
 export async function lister(_req: Request, res: Response): Promise<void> {
@@ -41,4 +49,65 @@ export async function harmoniser(
   const { coupleModeleId, edition } = schemaHarmonisation.parse(req.body);
   const resultat = await harmoniserCouple(req.params.codeActivite, coupleModeleId, edition);
   res.json(resultat);
+}
+
+const schemaRedaction = z.object({
+  coupleModeleId: z.number().int().positive(),
+  edition: schemaEdition,
+});
+
+/**
+ * PUT /api/activites/:codeActivite/redaction — réécrit une rédaction sur les seuls couples
+ * qui la portent, sans toucher aux autres rédactions du même code.
+ */
+export async function modifierRedaction(
+  req: Request<{ codeActivite: string }>,
+  res: Response,
+): Promise<void> {
+  const { coupleModeleId, edition } = schemaRedaction.parse(req.body);
+  const resultat = await modifierRedactionVariante(req.params.codeActivite, coupleModeleId, edition);
+  res.json(resultat);
+}
+
+const schemaConnaissances = z.object({
+  connaissances: z
+    .array(
+      z.object({
+        codeFormacode: z.string().trim().min(1).max(10),
+        niveau: z.number().int().min(1).max(4).nullable(),
+      }),
+    )
+    .max(20),
+});
+
+/**
+ * PUT /api/activites/:codeActivite/couples/:id/connaissances — les domaines de connaissance
+ * d'un couple. Portée volontairement limitée à un couple : ils diffèrent d'un métier à
+ * l'autre pour un même code activité (voir couple.service.ts).
+ */
+export async function modifierConnaissances(
+  req: Request<{ codeActivite: string; id: string }>,
+  res: Response,
+): Promise<void> {
+  const coupleId = Number(req.params.id);
+  if (!Number.isInteger(coupleId) || coupleId <= 0) {
+    throw HttpError.badRequest('Identifiant de couple invalide');
+  }
+
+  const { connaissances } = schemaConnaissances.parse(req.body);
+  const apres = await modifierConnaissancesCouple(req.params.codeActivite, coupleId, connaissances);
+  res.json({ data: apres });
+}
+
+/**
+ * POST /api/activites/:codeActivite/scinder — l'autre issue à une incohérence : détacher
+ * la rédaction divergente vers un nouveau code du même halo, au lieu de l'aligner.
+ */
+export async function scinder(
+  req: Request<{ codeActivite: string }>,
+  res: Response,
+): Promise<void> {
+  const { coupleModeleId, edition } = schemaHarmonisation.parse(req.body);
+  const resultat = await scinderVariante(req.params.codeActivite, coupleModeleId, edition);
+  res.status(201).json(resultat);
 }
