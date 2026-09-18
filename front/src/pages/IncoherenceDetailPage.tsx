@@ -221,6 +221,7 @@ export function IncoherenceDetailPage() {
                     onChange={setEdition}
                     idPrefix={`inc-${v.coupleModeleId}`}
                     desactive={actionEnCours}
+                    sansNiveaux={v.niveauxMaitrise.length === 0}
                   />
                 ) : (
                   <>

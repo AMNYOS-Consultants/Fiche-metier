@@ -183,7 +183,9 @@ export function NouveauCouplePage() {
   }, [emplacement, codesFamille, choixLettre, lettres, toutesFamilles]);
 
   function reprendre(v: VarianteDetaillee) {
-    setRedaction(redactionDepuis(v));
+    // Les niveaux de maîtrise ne sont plus saisis à la création : on ne recopie pas ceux
+    // de la rédaction source, le formulaire ne les afficherait pas.
+    setRedaction({ ...redactionDepuis(v), niveaux: REDACTION_VIDE.niveaux });
     setConnaissances(
       v.connaissances.map((c) => ({
         codeFormacode: c.codeFormacode,
@@ -594,6 +596,7 @@ export function NouveauCouplePage() {
           onChange={setRedaction}
           idPrefix="nouveau"
           desactive={creation}
+          sansNiveaux
         />
       </section>
 

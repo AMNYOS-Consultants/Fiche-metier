@@ -143,6 +143,7 @@ export function ActiviteDetailPage() {
                   onChange={setRedaction}
                   idPrefix={`red-${v.coupleModeleId}`}
                   desactive={enregistrement}
+                  sansNiveaux={v.niveauxMaitrise.length === 0}
                 />
                 <p className="detail">
                   L’enregistrement s’applique aux {v.metiers.length} métier(s) qui portent cette

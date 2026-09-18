@@ -302,6 +302,11 @@ export interface RomeReferentiel {
   libelle: string | null;
 }
 
+/** GET /api/referentiels/rome — un code ROME et les fiches métier qui le citent. */
+export interface RomeAvecMetiers extends RomeReferentiel {
+  metiers: Array<{ codeMetier: string; intitule: string }>;
+}
+
 // ---------- Incohérences entre rédactions d'un même couple ----------
 
 /** Un code activité dont les rédactions divergent selon le métier (hors mots-clés). */

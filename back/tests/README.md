@@ -23,7 +23,14 @@ npm run test:watch  # mode watch, pour le développement
 - `setup.ts` — ferme le pool Sequelize après la suite (`fileParallelism: false` dans
   `vitest.config.ts` : les tests tournent en série, une seule connexion à la fois).
 - Un fichier par domaine, aligné sur `src/routes/*.routes.ts` : `auth`, `metiers`,
-  `activites`, `formacodes`, `passerelles`, `referentiels`, `export`.
+  `activites`, `formacodes`, `passerelles`, `referentiels` (dont `/referentiels/rome`),
+  `export`.
+- `correctionsFormacodes.test.ts` — le seul test hors HTTP : il appelle directement
+  `corrigerFormacodes()` (src/database/importers) avec des listes de substitution, sur des
+  formacodes et une fiche ZZTEST montés pour l'occasion. Il vérifie le re-pointage des
+  domaines de couple et des durées, la règle de collision, la suppression de l'ancien code,
+  la péremption des passerelles, l'idempotence et le journal `import_batch` (les lignes
+  écrites par le test sont retirées à la fin).
 
 ## Principes suivis
 
@@ -42,9 +49,10 @@ npm run test:watch  # mode watch, pour le développement
 
 ## Ce qui n'est pas couvert (pour l'instant)
 
-- Les endpoints d'ajout/suppression d'un couple activité-compétence sur une fiche
-  (`POST/DELETE /metiers/:code/couples`) et `POST /passerelles/recalculer` (recalcule
-  ~110 000 lignes, trop coûteux pour un test à chaque run) ne sont pas exercés.
+- `POST /metiers/:code/couples` n'est exercé qu'en montage du test des corrections de
+  formacodes, pas pour lui-même ; `DELETE /metiers/:code/couples/:id` et
+  `POST /passerelles/recalculer` (recalcule ~110 000 lignes, trop coûteux pour un test à
+  chaque run) ne le sont pas.
 - Aucun test frontend (composants React) ni end-to-end navigateur : cette suite s'arrête à
   l'API. Un smoke test Playwright serait la suite logique si besoin.
 

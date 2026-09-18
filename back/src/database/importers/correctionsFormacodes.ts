@@ -35,6 +35,30 @@ export const CORRECTIONS_FORMACODES: ReadonlyArray<{
   { ancien: '25052', nouveau: '24052', motif: 'Erreur de saisie (Electromécanique)' },
 ];
 
+/**
+ * Formacodes cités par les fiches mais absents des deux référentiels : l'import les crée
+ * avec le code en guise d'intitulé (couples.importer.ts, `enregistrerConnaissances`).
+ * Intitulés fournis par le métier le 18/09/2026. Appliqués sans condition : cette liste
+ * fait référence, comme les remplacements ci-dessus.
+ */
+export const INTITULES_FORMACODES: ReadonlyArray<{ code: string; intitule: string }> = [
+  { code: '31047', intitule: 'CMMI' },
+  { code: '34554', intitule: 'Commerce' },
+  { code: '21754', intitule: 'Habillement' },
+  { code: '15234', intitule: 'Anglais' },
+];
+
+export interface BilanIntitule {
+  code: string;
+  intitule: string;
+  statut: 'corrige' | 'deja_corrige' | 'code_absent';
+}
+
+export interface BilanCorrections {
+  codes: BilanCorrection[];
+  intitules: BilanIntitule[];
+}
+
 export interface BilanCorrection {
   ancien: string;
   nouveau: string;
@@ -62,29 +86,43 @@ export interface BilanCorrection {
  *
  * Les fiches concernées sont datées périmées (`marquerProximitePerimee`) : le calcul des
  * passerelles dépend des formacodes des couples. Le recalcul reste à lancer ensuite.
+ *
+ * Les deux listes se substituent uniquement pour les tests (tests/correctionsFormacodes) :
+ * en exploitation, ce sont toujours celles de ce fichier.
  */
-export async function corrigerFormacodes(): Promise<BilanCorrection[]> {
+export async function corrigerFormacodes(
+  corrections: ReadonlyArray<{ ancien: string; nouveau: string; motif: string }> =
+    CORRECTIONS_FORMACODES,
+  intitules: ReadonlyArray<{ code: string; intitule: string }> = INTITULES_FORMACODES,
+): Promise<BilanCorrections> {
   const batch = await ImportBatch.create({
     fichier: 'corrections formacodes',
     feuille: null,
-    lignesLues: CORRECTIONS_FORMACODES.length,
+    lignesLues: corrections.length + intitules.length,
     rapport: null,
     termineLe: null,
   });
 
   const transaction = await sequelize.transaction();
   try {
-    const bilans: BilanCorrection[] = [];
-    for (const correction of CORRECTIONS_FORMACODES) {
-      bilans.push(await corriger(correction, transaction));
+    const bilans: BilanCorrections = { codes: [], intitules: [] };
+    for (const correction of corrections) {
+      bilans.codes.push(await corriger(correction, transaction));
+    }
+    for (const reference of intitules) {
+      bilans.intitules.push(await renommer(reference, transaction));
     }
 
-    const corriges = bilans.filter((b) => b.statut === 'corrige').length;
-    const absentes = bilans.filter((b) => b.statut === 'cible_absente').length;
+    const corriges =
+      bilans.codes.filter((b) => b.statut === 'corrige').length +
+      bilans.intitules.filter((b) => b.statut === 'corrige').length;
+    const absents =
+      bilans.codes.filter((b) => b.statut === 'cible_absente').length +
+      bilans.intitules.filter((b) => b.statut === 'code_absent').length;
     await batch.update(
       {
         lignesOk: corriges,
-        lignesErreur: absentes,
+        lignesErreur: absents,
         rapport: bilans,
         statut: 'termine',
         termineLe: new Date(),
@@ -176,9 +214,31 @@ async function corriger(
   };
 }
 
+/** Intitulé seul : rien d'autre ne dépend du libellé, les passerelles ne bougent pas. */
+async function renommer(
+  { code, intitule }: { code: string; intitule: string },
+  transaction: Transaction,
+): Promise<BilanIntitule> {
+  const formacode = await Formacode.findByPk(code, { transaction });
+  if (!formacode) return { code, intitule, statut: 'code_absent' };
+  if (formacode.intitule === intitule) return { code, intitule, statut: 'deja_corrige' };
+
+  await formacode.update({ intitule }, { transaction });
+  return { code, intitule, statut: 'corrige' };
+}
+
 /** Bilan lisible en console, une ligne par correction. */
-export function afficherBilan(bilans: BilanCorrection[]): void {
-  for (const b of bilans) {
+export function afficherBilan({ codes, intitules }: BilanCorrections): void {
+  for (const b of intitules) {
+    if (b.statut === 'code_absent') {
+      console.log(`   ⚠️  ${b.code} « ${b.intitule} » ignoré : aucune fiche ne cite ce code`);
+    } else if (b.statut === 'deja_corrige') {
+      console.log(`   ·  ${b.code} « ${b.intitule} » déjà en place`);
+    } else {
+      console.log(`   ✔  ${b.code} renommé « ${b.intitule} »`);
+    }
+  }
+  for (const b of codes) {
     const fleche = `${b.ancien} → ${b.nouveau}`;
     if (b.statut === 'cible_absente') {
       console.log(`   ⚠️  ${fleche} ignoré : le code ${b.nouveau} n'existe pas en base`);
@@ -195,7 +255,7 @@ export function afficherBilan(bilans: BilanCorrection[]): void {
       console.log(`   ✔  ${fleche} (${b.motif}) : ${details.join(', ')}`);
     }
   }
-  const touches = bilans.reduce((n, b) => n + b.metiersTouches, 0);
+  const touches = codes.reduce((n, b) => n + b.metiersTouches, 0);
   if (touches > 0) {
     console.log(`   → ${touches} fiche(s) touchée(s) : relancer le recalcul des proximités`);
   }

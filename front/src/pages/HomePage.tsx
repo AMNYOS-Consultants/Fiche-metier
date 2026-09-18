@@ -21,6 +21,11 @@ const SECTIONS = [
     texte:
       'Les formacodes, leur rattachement NSF et les durées d’acquisition par niveau d’approfondissement.',
   },
+  {
+    to: '/rome',
+    titre: 'Codes ROME',
+    texte: 'Les codes ROME cités par les fiches, avec les métiers rattachés à chacun.',
+  },
 ];
 
 export function HomePage() {

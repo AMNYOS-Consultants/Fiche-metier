@@ -53,6 +53,11 @@ interface Props {
   /** Préfixe des `id` : plusieurs formulaires cohabitent sur une même page. */
   idPrefix: string;
   desactive?: boolean;
+  /**
+   * Masque les niveaux de maîtrise. Ils ne sont plus renseignés sur les nouvelles
+   * rédactions ; on ne les montre que là où une rédaction existante en porte déjà.
+   */
+  sansNiveaux?: boolean;
 }
 
 /**
@@ -60,7 +65,13 @@ interface Props {
  * connaissance n'y sont pas — ils pendent du couple et s'éditent métier par métier
  * (`EditeurConnaissances`).
  */
-export function FormulaireRedaction({ redaction, onChange, idPrefix, desactive }: Props) {
+export function FormulaireRedaction({
+  redaction,
+  onChange,
+  idPrefix,
+  desactive,
+  sansNiveaux,
+}: Props) {
   return (
     <div className="edition-couple">
       <div className="passerelles-champ">
@@ -111,30 +122,32 @@ export function FormulaireRedaction({ redaction, onChange, idPrefix, desactive }
         </div>
       </div>
 
-      <div className="passerelles-champ">
-        <label>Niveaux de maîtrise (laisser vide si non retenu)</label>
-        <div className="edition-couple__niveaux">
-          {([0, 1, 2, 3] as const).map((i) => (
-            <div key={i} className="passerelles-champ">
-              <label htmlFor={`${idPrefix}-nm-${i}`} className="detail">
-                Niveau {i + 1}
-              </label>
-              <textarea
-                id={`${idPrefix}-nm-${i}`}
-                className="edition__texte"
-                rows={2}
-                value={redaction.niveaux[i]}
-                disabled={desactive}
-                onChange={(e) => {
-                  const niveaux = [...redaction.niveaux] as Redaction['niveaux'];
-                  niveaux[i] = e.target.value;
-                  onChange({ ...redaction, niveaux });
-                }}
-              />
-            </div>
-          ))}
+      {!sansNiveaux && (
+        <div className="passerelles-champ">
+          <label>Niveaux de maîtrise (laisser vide si non retenu)</label>
+          <div className="edition-couple__niveaux">
+            {([0, 1, 2, 3] as const).map((i) => (
+              <div key={i} className="passerelles-champ">
+                <label htmlFor={`${idPrefix}-nm-${i}`} className="detail">
+                  Niveau {i + 1}
+                </label>
+                <textarea
+                  id={`${idPrefix}-nm-${i}`}
+                  className="edition__texte"
+                  rows={2}
+                  value={redaction.niveaux[i]}
+                  disabled={desactive}
+                  onChange={(e) => {
+                    const niveaux = [...redaction.niveaux] as Redaction['niveaux'];
+                    niveaux[i] = e.target.value;
+                    onChange({ ...redaction, niveaux });
+                  }}
+                />
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

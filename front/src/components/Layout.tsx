@@ -6,6 +6,7 @@ const LIENS = [
   { to: '/metiers', label: 'Métiers' },
   { to: '/activites', label: 'Activités & compétences' },
   { to: '/formacodes', label: 'Domaines de connaissance' },
+  { to: '/rome', label: 'Codes ROME' },
   { to: '/passerelles', label: 'Passerelles' },
 ];
 

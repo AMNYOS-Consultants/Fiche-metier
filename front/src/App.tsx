@@ -12,6 +12,7 @@ import { IncoherenceDetailPage } from '@/pages/IncoherenceDetailPage';
 import { FormacodesPage } from '@/pages/FormacodesPage';
 import { FormacodeDetailPage } from '@/pages/FormacodeDetailPage';
 import { PasserellesPage } from '@/pages/PasserellesPage';
+import { RomePage } from '@/pages/RomePage';
 import { LoginPage } from '@/pages/LoginPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
 import { AuthProvider } from '@/context/AuthContext';
@@ -42,6 +43,7 @@ export function App() {
             <Route path="activites/:code" element={<ActiviteDetailPage />} />
             <Route path="formacodes" element={<FormacodesPage />} />
             <Route path="formacodes/:code" element={<FormacodeDetailPage />} />
+            <Route path="rome" element={<RomePage />} />
             <Route path="passerelles" element={<PasserellesPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>

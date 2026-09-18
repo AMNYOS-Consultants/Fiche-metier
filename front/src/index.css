@@ -1410,3 +1410,19 @@ h2 {
 .comparaison-infobulle__tableau td {
   padding: 0.3rem 0.5rem;
 }
+
+/* ---------- Codes ROME ---------- */
+
+/* Une ligne par métier rattaché : lisible même quand un code en porte une dizaine. */
+.rome__metiers {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.rome__metiers .couple__code {
+  margin-right: 0.35rem;
+}

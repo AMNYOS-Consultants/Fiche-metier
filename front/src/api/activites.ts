@@ -6,6 +6,7 @@ import type {
   Formacode,
   FormacodeNiveau,
   Referentiels,
+  RomeAvecMetiers,
   CodeIncoherent,
   VarianteDetaillee,
   EditionModele,
@@ -128,6 +129,11 @@ export function modifierFormacodeNiveaux(
 
 export function obtenirReferentiels(signal?: AbortSignal) {
   return apiGet<Referentiels>('/referentiels', undefined, signal);
+}
+
+/** Tous les codes ROME avec les métiers qui les portent — 136 codes, pas de pagination. */
+export function listerRome(signal?: AbortSignal) {
+  return apiGet<{ data: RomeAvecMetiers[] }>('/referentiels/rome', undefined, signal);
 }
 
 // ---------- Incohérences entre rédactions d'un même couple ----------

@@ -41,9 +41,20 @@ export function NouveauMetierPage() {
   const numero = useMemo(() => prochainNumero(codesConnus), [codesConnus]);
   const codePreview = codeFamille ? `${codeFamille}${numero}` : null;
 
+  // Tous les champs sont obligatoires. Le dossier source se donne par la liste OU en
+  // clair (« si absent de la liste ») : l'un des deux suffit.
+  const complet =
+    codeFamille !== '' &&
+    intitule.trim() !== '' &&
+    definition.trim() !== '' &&
+    (dossierSourceId !== '' || dossierAutre.trim() !== '') &&
+    redacteur.trim() !== '' &&
+    responsTransverse !== '' &&
+    interfaceAmontAval !== '';
+
   async function creer() {
-    if (!codeFamille || !intitule.trim()) {
-      setErreurCreation('La famille et l’intitulé sont obligatoires.');
+    if (!complet) {
+      setErreurCreation('Tous les champs sont obligatoires.');
       return;
     }
 
@@ -216,10 +227,17 @@ export function NouveauMetierPage() {
             <Link to="/metiers" className="bouton--secondaire">
               Annuler
             </Link>
-            <button type="button" className="bouton--export" onClick={creer} disabled={creationEnCours}>
+            <button
+              type="button"
+              className="bouton--export"
+              onClick={creer}
+              disabled={creationEnCours || !complet}
+              title={complet ? undefined : 'Tous les champs sont obligatoires'}
+            >
               {creationEnCours ? 'Création…' : 'Créer la fiche'}
             </button>
           </div>
+          {!complet && <p className="detail">Tous les champs sont obligatoires.</p>}
         </div>
       )}
     </div>
