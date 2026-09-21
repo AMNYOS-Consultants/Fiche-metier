@@ -1,71 +1,29 @@
 import { Request, Response } from 'express';
-import {
-  Metier,
-  FamilleMetier,
-  DossierSource,
-  MetierActivite,
-  ActiviteConnaissance,
-  MetierTransversale,
-  CompetenceTransversale,
-  MetierCondition,
-  CritereCondition,
-  MetierAcces,
-  CritereAcces,
-} from '../models';
+import { lireBase, versionSchema } from '../services/classeur/lecture';
+import { ecrireClasseur, nomFichier } from '../services/classeur/ecriture';
 
 /**
- * GET /api/export/general — les tables sources de l'app, à plat, pour un export externe
- * (page Domaines de connaissance, bouton « Exporter toute la base »).
+ * GET /api/export/general — la base entière en un classeur .xlsx, une feuille par table.
  *
- * Six requêtes indépendantes plutôt qu'un seul `findAll` à includes multiples : plusieurs
- * `hasMany` inclus ensemble produiraient un produit cartésien (un métier avec 5 couples et
- * 12 ressources transverses donnerait 60 lignes dupliquées). Le volume total (~20 000 lignes
- * réparties sur six tables) reste largement dans les clous d'un export déclenché à la main.
+ * Le classeur est produit ici et non côté front, parce que l'import le relit : une seule
+ * définition de feuilles et de colonnes (`services/classeur/schema.ts`) sert aux deux
+ * sens. Tant que l'écriture vivait dans le front et la lecture dans le back, deux listes
+ * de colonnes coexistaient, et leur divergence aurait cassé l'aller-retour en silence.
  *
- * `metier_proximite` (110 000 lignes calculées, pas des données sources) en est délibérément
- * exclue — voir services/passerelle.service.ts si un export dédié devient utile.
+ * Ce que l'export ne contient pas, et pourquoi, est documenté par `HORS_CLASSEUR`
+ * (`services/classeur/lecture.ts`) — et repris dans la feuille « Lisez-moi » du fichier.
  */
 export async function exporterGeneral(_req: Request, res: Response): Promise<void> {
-  const [metiers, couples, connaissances, transversales, conditions, acces] = await Promise.all([
-    Metier.findAll({
-      include: [
-        { model: FamilleMetier, as: 'famille', attributes: ['intitule'] },
-        { model: DossierSource, as: 'dossierSource', attributes: ['libelle'] },
-      ],
-      order: [['codeMetier', 'ASC']],
-    }),
-    MetierActivite.findAll({
-      attributes: ['codeMetier', 'codeActivite', 'ordre', 'intituleActivite', 'intituleCompetence'],
-      order: [
-        ['codeMetier', 'ASC'],
-        ['ordre', 'ASC'],
-      ],
-    }),
-    ActiviteConnaissance.findAll({
-      include: [
-        {
-          model: MetierActivite,
-          as: 'couple',
-          attributes: ['codeMetier', 'codeActivite', 'ordre'],
-        },
-      ],
-      order: [['id', 'ASC']],
-    }),
-    MetierTransversale.findAll({
-      include: [
-        { model: CompetenceTransversale, as: 'competence', attributes: ['libelle', 'groupe'] },
-      ],
-      order: [['codeMetier', 'ASC']],
-    }),
-    MetierCondition.findAll({
-      include: [{ model: CritereCondition, as: 'critere', attributes: ['libelle'] }],
-      order: [['codeMetier', 'ASC']],
-    }),
-    MetierAcces.findAll({
-      include: [{ model: CritereAcces, as: 'critere', attributes: ['libelle'] }],
-      order: [['codeMetier', 'ASC']],
-    }),
-  ]);
+  const exporteLe = new Date().toISOString();
+  const [contenu, version] = await Promise.all([lireBase(), versionSchema()]);
+  const classeur = ecrireClasseur(contenu, { exporteLe, versionSchema: version });
 
-  res.json({ metiers, couples, connaissances, transversales, conditions, acces });
+  res.setHeader(
+    'Content-Type',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  );
+  res.setHeader('Content-Disposition', `attachment; filename="${nomFichier(exporteLe)}"`);
+  // Le front lit cet en-tête pour afficher la version du schéma sans rouvrir le fichier.
+  res.setHeader('X-Version-Schema', version ?? '');
+  res.send(classeur);
 }

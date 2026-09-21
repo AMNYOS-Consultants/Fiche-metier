@@ -33,6 +33,7 @@ export const env = {
   xlsx: {
     formacodes: optional('XLSX_FORMACODES', '../Base formacodes_DC structurants.xlsx'),
     competences: optional('XLSX_COMPETENCES', '../251230_base competences_V3.3.xlsm'),
+    rome: optional('XLSX_ROME', '../docs/rome-arborescence-principale-juin-2026.xlsx'),
   },
 
   auth: {

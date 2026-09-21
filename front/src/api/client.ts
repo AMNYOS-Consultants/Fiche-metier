@@ -59,6 +59,41 @@ export async function apiGet<T>(
   return reponse.json() as Promise<T>;
 }
 
+/** Nom de fichier posé par le back dans `Content-Disposition: attachment; filename="…"`. */
+function nomDepuisContentDisposition(entete: string | null, repli: string): string {
+  const m = entete?.match(/filename="([^"]+)"/);
+  return m ? m[1] : repli;
+}
+
+/**
+ * Récupère un fichier brut (export .xlsx…) plutôt qu'une réponse JSON. Le corps d'erreur
+ * reste au format JSON habituel — seule une réponse `ok` est traitée comme binaire.
+ */
+export async function apiGetFichier(
+  chemin: string,
+  nomRepli: string,
+  signal?: AbortSignal,
+): Promise<{ blob: Blob; nomFichier: string }> {
+  const reponse = await fetch(construireUrl(chemin), {
+    credentials: 'include',
+    signal,
+  });
+
+  if (!reponse.ok) {
+    gererExpirationSession(reponse.status);
+    const corps = await reponse.json().catch(() => null);
+    throw new ApiError(
+      reponse.status,
+      corps?.error?.message ?? `Erreur ${reponse.status}`,
+      corps?.error?.code,
+    );
+  }
+
+  const blob = await reponse.blob();
+  const nomFichier = nomDepuisContentDisposition(reponse.headers.get('Content-Disposition'), nomRepli);
+  return { blob, nomFichier };
+}
+
 async function envoyer<T>(
   methode: 'POST' | 'PATCH' | 'PUT',
   chemin: string,
@@ -97,6 +132,41 @@ export function apiPatch<T>(chemin: string, corps?: unknown, signal?: AbortSigna
 /** Remplacement d'un ensemble complet — voir les niveaux transverses, écrits en bloc. */
 export function apiPut<T>(chemin: string, corps?: unknown, signal?: AbortSignal): Promise<T> {
   return envoyer<T>('PUT', chemin, corps, signal);
+}
+
+/**
+ * Envoie un fichier tel quel comme corps de requête — pas de multipart, le corps *est* le
+ * fichier. Utilisé par l'import général : le back attend un .xlsx brut
+ * (`express.raw()`), jamais un objet dont les clés viendraient du fichier.
+ */
+export async function apiPostFichier<T>(
+  chemin: string,
+  fichier: File,
+  signal?: AbortSignal,
+): Promise<T> {
+  const reponse = await fetch(construireUrl(chemin), {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type':
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    },
+    credentials: 'include',
+    body: fichier,
+    signal,
+  });
+
+  if (!reponse.ok) {
+    gererExpirationSession(reponse.status);
+    const corpsErreur = await reponse.json().catch(() => null);
+    throw new ApiError(
+      reponse.status,
+      corpsErreur?.error?.message ?? `Erreur ${reponse.status}`,
+      corpsErreur?.error?.code,
+    );
+  }
+
+  return reponse.json() as Promise<T>;
 }
 
 /**

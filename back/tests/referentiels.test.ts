@@ -59,6 +59,45 @@ describe('Référentiels', () => {
     expect(fiche.body.codesRome.map((c: { codeRome: string }) => c.codeRome)).toContain(codeRome);
   });
 
+  it('le référentiel ROME est chargé en entier, avec ses intitulés', async () => {
+    const res = await agent.get('/api/referentiels').expect(200);
+    const rome = res.body.rome;
+
+    // 1 911 fiches dans l'arborescence principale de juin 2026.
+    expect(rome.length).toBeGreaterThanOrEqual(1911);
+    for (const r of rome) {
+      expect(r.codeRome).toMatch(/^[A-Z]\d{4}$/);
+      expect(typeof r.nbMetiers).toBe('number');
+    }
+    // Tous les codes viennent du référentiel : aucun libellé manquant.
+    expect(rome.filter((r: { libelle: string | null }) => !r.libelle)).toHaveLength(0);
+    // L'intitulé retenu est le principal de la fiche (première ligne du classeur, la seule
+    // en gras), et non l'une de ses 11 appellations comme « Agent d'entretien de l'espace
+    // rural » — c'est tout l'enjeu de la lecture du référentiel.
+    const a1202 = rome.find((r: { codeRome: string }) => r.codeRome === 'A1202');
+    expect(a1202.libelle).toBe("Ouvrier / Ouvrière d'entretien des espaces naturels");
+  });
+
+  it('nbMetiers concorde avec les codes réellement portés par les fiches', async () => {
+    const [referentiels, rome] = await Promise.all([
+      agent.get('/api/referentiels').expect(200),
+      agent.get('/api/referentiels/rome').expect(200),
+    ]);
+
+    const parCode = new Map(
+      rome.body.data.map((r: { codeRome: string; metiers: unknown[] }) => [
+        r.codeRome,
+        r.metiers.length,
+      ]),
+    );
+    for (const r of referentiels.body.rome) {
+      expect(r.nbMetiers).toBe(parCode.get(r.codeRome));
+    }
+    // Le filtre de la page Métiers ne propose que ceux-là : il doit rester non vide.
+    expect(referentiels.body.rome.filter((r: { nbMetiers: number }) => r.nbMetiers > 0).length)
+      .toBeGreaterThan(0);
+  });
+
   it('chaque famille d’activité porte un domaine 1 (catégorisation peuplée)', async () => {
     const res = await agent.get('/api/referentiels').expect(200);
     for (const famille of res.body.famillesActivite) {

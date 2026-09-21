@@ -18,7 +18,7 @@ import {
  * un seul aller-retour au démarrage évite 7 requêtes.
  */
 export async function listerReferentiels(_req: Request, res: Response): Promise<void> {
-  const [familles, famillesActivite, conditions, transversales, acces, dossiers, nsf, rome] =
+  const [familles, famillesActivite, conditions, transversales, acces, dossiers, nsf, rome, usages] =
     await Promise.all([
       FamilleMetier.findAll({ order: [['codeFamille', 'ASC']] }),
       FamilleActivite.findAll({ order: [['codeFamilleActivite', 'ASC']] }),
@@ -28,7 +28,18 @@ export async function listerReferentiels(_req: Request, res: Response): Promise<
       DossierSource.findAll({ order: [['libelle', 'ASC']] }),
       Nsf.findAll({ order: [['codeNsf', 'ASC']] }),
       Rome.findAll({ order: [['codeRome', 'ASC']] }),
+      // Le référentiel ROME compte 1 911 fiches, dont une centaine seulement est citée par
+      // une fiche métier. `nbMetiers` permet au filtre de la page Métiers de ne proposer que
+      // les codes qui ramèneraient un résultat, là où le sélecteur d'une fiche doit garder
+      // le référentiel entier.
+      sequelize.query<{ codeRome: string; nbMetiers: number }>(
+        `SELECT code_rome AS codeRome, COUNT(*) AS nbMetiers
+           FROM metier_rome GROUP BY code_rome`,
+        { type: QueryTypes.SELECT },
+      ),
     ]);
+
+  const nbParCode = new Map(usages.map((u) => [u.codeRome, Number(u.nbMetiers)]));
 
   res.json({
     famillesMetier: familles,
@@ -38,16 +49,16 @@ export async function listerReferentiels(_req: Request, res: Response): Promise<
     acces,
     dossiersSource: dossiers,
     nsf,
-    rome,
+    rome: rome.map((r) => ({ ...r.toJSON(), nbMetiers: nbParCode.get(r.codeRome) ?? 0 })),
   });
 }
 
 /**
  * GET /api/referentiels/rome — les codes ROME et les fiches qui les citent.
  *
- * 136 codes, chacun porté par quelques métiers : tout tient dans une réponse, la page
- * filtre côté client. Une jointure à plat plutôt qu'un `include` sur deux niveaux, puis
- * regroupement par code ici.
+ * Le référentiel entier (1 911 codes, dont 136 cités par une fiche) tient dans une réponse
+ * — deux colonnes courtes par ligne : la page filtre côté client. Une jointure à plat
+ * plutôt qu'un `include` sur deux niveaux, puis regroupement par code ici.
  */
 export async function listerRome(_req: Request, res: Response): Promise<void> {
   const [codes, liens] = await Promise.all([

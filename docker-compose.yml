@@ -65,10 +65,12 @@ services:
       # Chemins absolus : les classeurs sont montés, pas copiés dans l'image.
       XLSX_FORMACODES: /data/formacodes.xlsx
       XLSX_COMPETENCES: /data/competences.xlsm
+      XLSX_ROME: /data/rome-arborescence.xlsx
       RUN_MIGRATIONS: "true"
     volumes:
       - "./Base formacodes_DC structurants.xlsx:/data/formacodes.xlsx:ro"
       - "./251230_base competences_V3.3.xlsm:/data/competences.xlsm:ro"
+      - "./docs/rome-arborescence-principale-juin-2026.xlsx:/data/rome-arborescence.xlsx:ro"
     ports:
       # Le front proxifie déjà /api ; ce port n'est exposé que pour le débogage.
       - "${BACK_PORT:-4000}:4000"

@@ -63,11 +63,14 @@ export function MetiersPage() {
           label="Fiche ROME"
           valeur={rome}
           onChange={changerFiltre(setRome)}
-          options={(referentiels.donnees?.rome ?? []).map((r) => ({
-            valeur: r.codeRome,
-            // La source ne documente le libellé que pour 27 des 136 codes.
-            libelle: r.libelle ? `${r.codeRome} — ${r.libelle}` : r.codeRome,
-          }))}
+          // Seuls les codes réellement portés par une fiche : le référentiel en compte
+          // 1 911, en proposer autant reviendrait à offrir surtout des filtres vides.
+          options={(referentiels.donnees?.rome ?? [])
+            .filter((r) => r.nbMetiers > 0)
+            .map((r) => ({
+              valeur: r.codeRome,
+              libelle: r.libelle ? `${r.codeRome} — ${r.libelle}` : r.codeRome,
+            }))}
         />
         <FiltreSelect
           label="Dossier"

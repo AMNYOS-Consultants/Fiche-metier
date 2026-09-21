@@ -14,6 +14,7 @@
     "db:recalc-proximites": "tsx src/database/recalculerProximites.ts",
     "db:corriger-formacodes": "tsx src/database/corrigerFormacodes.ts",
     "db:backfill-familles-activite": "tsx src/database/backfillFamilleActivite.ts",
+    "db:import-rome": "tsx src/database/importerRome.ts",
     "import:excel": "tsx src/database/importers/index.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --ext .ts",
@@ -30,7 +31,7 @@
     "morgan": "^1.10.0",
     "mysql2": "^3.12.0",
     "sequelize": "^6.37.5",
-    "xlsx": "^0.18.5",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "zod": "^4.4.3"
   },
   "devDependencies": {

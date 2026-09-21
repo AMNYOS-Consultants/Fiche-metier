@@ -5,6 +5,7 @@ import { formacodeRoutes } from './formacode.routes';
 import { referentielRoutes } from './referentiel.routes';
 import { passerelleRoutes } from './passerelle.routes';
 import { exportRoutes } from './export.routes';
+import { importRoutes } from './import.routes';
 import { authRoutes } from './auth.routes';
 import { exigerAuthentification } from '../middlewares/auth.middleware';
 
@@ -26,3 +27,4 @@ apiRoutes.use('/formacodes', formacodeRoutes);
 apiRoutes.use('/referentiels', referentielRoutes);
 apiRoutes.use('/passerelles', passerelleRoutes);
 apiRoutes.use('/export', exportRoutes);
+apiRoutes.use('/import', importRoutes);

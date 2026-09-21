@@ -54,6 +54,7 @@
 import { sequelize } from '../connection';
 import { importerFormacodes } from './formacodes.importer';
 import { importerReferentiels } from './referentiels.importer';
+import { importerRome, afficherBilanRome } from './rome.importer';
 import { importerMetiers } from './metiers.importer';
 import { importerCouples } from './couples.importer';
 import { importerFormacodeNiveau } from './formacodeNiveau.importer';
@@ -71,6 +72,11 @@ async function main(): Promise<void> {
 
   console.log('\n▶  Import des référentiels…');
   await importerReferentiels();
+
+  // Avant les fiches : leurs codes ROME se rattachent alors à un référentiel déjà chargé,
+  // au lieu d'être créés à la volée sans rien qui les valide.
+  console.log('\n▶  Import du référentiel ROME…');
+  afficherBilanRome(await importerRome());
 
   console.log('\n▶  Import des fiches métier (Outil_collecte_fiche_metier)…');
   await importerMetiers();

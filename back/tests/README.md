@@ -23,8 +23,17 @@ npm run test:watch  # mode watch, pour le développement
 - `setup.ts` — ferme le pool Sequelize après la suite (`fileParallelism: false` dans
   `vitest.config.ts` : les tests tournent en série, une seule connexion à la fois).
 - Un fichier par domaine, aligné sur `src/routes/*.routes.ts` : `auth`, `metiers`,
-  `activites`, `formacodes`, `passerelles`, `referentiels` (dont `/referentiels/rome`),
-  `export`.
+  `activites`, `formacodes`, `passerelles`, `referentiels` (dont `/referentiels/rome` et
+  l'intégrité du référentiel ROME importé : 1 911 fiches, aucun libellé manquant,
+  `nbMetiers` concordant avec les codes réellement portés), `export`.
+- `export.test.ts` ne vérifie pas que l'export répond, mais qu'il est **complet** : il
+  compare le compte de chaque clé au `COUNT(*)` de sa table, et **découvre le schéma**
+  via `information_schema` pour échouer si une table n'est ni exportée ni inscrite dans
+  la liste des exclusions assumées. Une migration qui ajoute une table fera donc tomber
+  ce test — c'est le rappel voulu, l'export étant destiné à être réimporté. Il verrouille
+  aussi la forme brute des valeurs (énumérations en base, booléens 0/1, dates ISO 8601)
+  et la présence de `metier_activite.id`, sans lequel les cinq tables filles d'un couple
+  ne se rattachent à rien.
 - `correctionsFormacodes.test.ts` — le seul test hors HTTP : il appelle directement
   `corrigerFormacodes()` (src/database/importers) avec des listes de substitution, sur des
   formacodes et une fiche ZZTEST montés pour l'occasion. Il vérifie le re-pointage des
@@ -41,7 +50,10 @@ npm run test:watch  # mode watch, pour le développement
 - **Rien n'est codé en dur.** Les codes (famille, ROME, condition, formacode, métier…)
   utilisés par les tests de lecture sont récupérés dynamiquement via `/api/referentiels` ou
   le premier élément d'une liste, pas hardcodés : la suite reste valide même si le contenu
-  de la base évolue.
+  de la base évolue. Seule exception assumée : `referentiels.test.ts` fige le couple
+  `A1202` → « Ouvrier / Ouvrière d'entretien des espaces naturels ». C'est précisément
+  l'oracle de l'import ROME — cette fiche porte 11 appellations, et retenir l'intitulé
+  principal plutôt que l'une d'elles est la règle que le test doit verrouiller.
 - Le test de `comparerMetiers()` (passerelles) vérifie explicitement l'absence de doublons
   de formacode dans les écarts — c'est la régression corrigée dans
   `services/passerelle.service.ts` (fan-out sur `formacode_niveau` quand plusieurs origines

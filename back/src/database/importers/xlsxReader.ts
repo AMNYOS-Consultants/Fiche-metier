@@ -27,6 +27,18 @@ export function lireFeuille(cheminFichier: string, nomFeuille: string): Ligne[] 
 }
 
 /**
+ * Noms des feuilles d'un classeur. Utile quand le nom porte une date et changera à la
+ * prochaine livraison du référentiel (« Arbo Principale 15-06-2026 ») : l'appelant le
+ * retrouve par préfixe au lieu de le coder en dur.
+ */
+export function nomsFeuilles(cheminFichier: string): string[] {
+  if (!fs.existsSync(cheminFichier)) {
+    throw new Error(`Fichier introuvable : ${cheminFichier}`);
+  }
+  return XLSX.readFile(cheminFichier, { bookSheets: true }).SheetNames;
+}
+
+/**
  * Lit une feuille en tableau de tableaux, indexé par position de colonne.
  *
  * À préférer à `lireFeuille` dès que les en-têtes sont ambigus. Dans

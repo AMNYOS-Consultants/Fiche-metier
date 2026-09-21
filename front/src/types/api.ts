@@ -298,8 +298,14 @@ export interface ComparaisonMetiers {
 
 export interface RomeReferentiel {
   codeRome: string;
-  /** Renseigné pour 27 codes seulement : la source ne documente pas les autres. */
+  /** Intitulé principal de la fiche ROME. Vide si le code ne vient pas du référentiel. */
   libelle: string | null;
+  /**
+   * Nombre de fiches métier citant ce code. Le référentiel compte 1 911 fiches, dont une
+   * centaine seulement est employée : de quoi n'offrir au filtre que les codes qui
+   * ramèneraient un résultat.
+   */
+  nbMetiers: number;
 }
 
 /** GET /api/referentiels/rome — un code ROME et les fiches métier qui le citent. */
@@ -354,71 +360,4 @@ export interface Referentiels {
   dossiersSource: DossierSource[];
   nsf: Array<{ codeNsf: string; libelle: string | null }>;
   rome: RomeReferentiel[];
-}
-
-// ---------- Export général (GET /export/general) ----------
-// Formes propres à cet export, pas les types de fiche ci-dessus : les includes Sequelize
-// y produisent une structure différente (colonnes à plat, une seule relation par ligne).
-
-export interface ExportGeneralMetier {
-  codeMetier: string;
-  intitule: string;
-  definition: string | null;
-  codeFamille: string | null;
-  famille?: { intitule: string } | null;
-  dossierSource?: { libelle: string } | null;
-  dossierAutre: string | null;
-  responsTransverse: string | null;
-  interfaceAmontAval: string | null;
-  redacteur: string | null;
-  nbCouple: number | null;
-}
-
-export interface ExportGeneralCouple {
-  codeMetier: string;
-  codeActivite: string;
-  ordre: number;
-  intituleActivite: string | null;
-  intituleCompetence: string | null;
-}
-
-export interface ExportGeneralConnaissance {
-  codeFormacode: string;
-  intitule: string | null;
-  niveau: number | null;
-  dureeHeures: string | null;
-  codeNsf: string | null;
-  estFondamental: boolean;
-  couple?: { codeMetier: string; codeActivite: string; ordre: number } | null;
-}
-
-export interface ExportGeneralTransversale {
-  codeMetier: string;
-  codeTransversale: string;
-  niveau: number | null;
-  nonConcerne: boolean;
-  competence?: { libelle: string; groupe: string | null } | null;
-}
-
-export interface ExportGeneralCondition {
-  codeMetier: string;
-  codeCondition: string;
-  valeur: string;
-  critere?: { libelle: string } | null;
-}
-
-export interface ExportGeneralAcces {
-  codeMetier: string;
-  codeAcces: string;
-  valeur: string;
-  critere?: { libelle: string } | null;
-}
-
-export interface ExportGeneral {
-  metiers: ExportGeneralMetier[];
-  couples: ExportGeneralCouple[];
-  connaissances: ExportGeneralConnaissance[];
-  transversales: ExportGeneralTransversale[];
-  conditions: ExportGeneralCondition[];
-  acces: ExportGeneralAcces[];
 }

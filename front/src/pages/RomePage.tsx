@@ -7,9 +7,9 @@ import { Loader } from '@/components/Loader';
 import { ErrorMessage } from '@/components/ErrorMessage';
 
 /**
- * Tous les codes ROME cités par les fiches, avec les métiers qui les portent. Le
- * référentiel tient en une réponse (136 codes) : la recherche filtre en mémoire, sur le
- * code, le libellé et les métiers rattachés.
+ * Le référentiel ROME entier (1 911 fiches), avec les métiers qui citent chaque code. Il
+ * tient en une réponse : la recherche filtre en mémoire, sur le code, le libellé et les
+ * métiers rattachés.
  */
 export function RomePage() {
   const [recherche, setRecherche] = useState('');
@@ -31,6 +31,7 @@ export function RomePage() {
   }, [rome.donnees, recherche]);
 
   const nbSansLibelle = (rome.donnees?.data ?? []).filter((r) => !r.libelle).length;
+  const nbPortes = (rome.donnees?.data ?? []).filter((r) => r.metiers.length > 0).length;
 
   return (
     <div className="page">
@@ -40,8 +41,11 @@ export function RomePage() {
 
       {rome.donnees && (
         <p className="detail">
-          {rome.donnees.data.length} codes cités par les fiches
-          {nbSansLibelle > 0 && ` — ${nbSansLibelle} sans libellé dans la source`}.
+          {rome.donnees.data.length} codes du référentiel, dont {nbPortes} porté
+          {nbPortes > 1 ? 's' : ''} par une fiche métier
+          {nbSansLibelle > 0 &&
+            ` — ${nbSansLibelle} sans libellé, donc absent${nbSansLibelle > 1 ? 's' : ''} du référentiel livré`}
+          .
         </p>
       )}
 

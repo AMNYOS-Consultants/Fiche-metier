@@ -452,6 +452,12 @@ h2 {
   justify-content: space-between;
   gap: 1rem;
 }
+.fiche__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
 .fiche__famille {
   color: var(--couleur-texte-doux);
   margin: 0;
@@ -1425,4 +1431,115 @@ h2 {
 
 .rome__metiers .couple__code {
   margin-right: 0.35rem;
+}
+
+/* ---------- Import général de la base ---------- */
+
+.modale-fond {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 24, 32, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  z-index: 100;
+}
+
+.modale {
+  background: var(--couleur-surface);
+  border-radius: var(--rayon);
+  width: min(720px, 100%);
+  max-height: min(85vh, 720px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 12px 32px rgba(20, 24, 32, 0.25);
+}
+
+.modale__titre {
+  margin: 0;
+  padding: 1.1rem 1.4rem;
+  border-bottom: 1px solid var(--couleur-bordure);
+  font-size: 1.15rem;
+}
+
+.modale__corps {
+  padding: 1.1rem 1.4rem;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.modale__pied {
+  padding: 0.9rem 1.4rem;
+  border-top: 1px solid var(--couleur-bordure);
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+}
+
+.import-general__avertissement {
+  background: #fdf3e7;
+  border: 1px solid #e8c896;
+  border-radius: var(--rayon);
+  padding: 0.6rem 0.8rem;
+  margin: 0 0 0.8rem;
+}
+
+.import-general__anomalies {
+  margin: 0.6rem 0 0;
+  padding-left: 1.2rem;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.import-general__anomalies li {
+  margin-bottom: 0.4rem;
+}
+
+.import-general__tableau {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.6rem;
+}
+.import-general__tableau th,
+.import-general__tableau td {
+  padding: 0.35rem 0.6rem;
+  border-bottom: 1px solid var(--couleur-bordure);
+  text-align: left;
+}
+.import-general__tableau td:not(:first-child) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.import-general__nb--ajout {
+  color: #1b7a3d;
+  font-weight: 600;
+}
+.import-general__nb--modif {
+  color: var(--couleur-accent);
+  font-weight: 600;
+}
+.import-general__nb--suppr {
+  color: var(--couleur-erreur);
+  font-weight: 600;
+}
+
+.import-general__exemples {
+  margin-top: 0.8rem;
+  font-size: 0.92rem;
+  color: var(--couleur-texte-doux);
+}
+.import-general__exemples summary {
+  cursor: pointer;
+  color: var(--couleur-accent);
+}
+.import-general__exemples p {
+  margin: 0.4rem 0;
+}
+
+.import-general__recalcul {
+  margin-top: 1rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--couleur-bordure);
 }
