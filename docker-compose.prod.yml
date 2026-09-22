@@ -36,7 +36,7 @@
 services:
   back:
     build: !reset null
-    image: ghcr.io/carlbrgs/fiche-metier-back:${IMAGE_TAG:-latest}
+    image: ghcr.io/amnyos-consultants/fiche-metier-back:${IMAGE_TAG:-latest}
     # `!override` : Compose fusionne les listes par défaut (il aurait sinon ajouté cette
     # entrée à celle de docker-compose.yml au lieu de la remplacer — le port serait resté
     # publié sur 0.0.0.0 *en plus* de 127.0.0.1, exactement ce que ce fichier doit éviter).
@@ -53,7 +53,7 @@ services:
 
   front:
     build: !reset null
-    image: ghcr.io/carlbrgs/fiche-metier-front:${IMAGE_TAG:-latest}
+    image: ghcr.io/amnyos-consultants/fiche-metier-front:${IMAGE_TAG:-latest}
 
   db:
     ports: !override

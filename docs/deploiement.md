@@ -10,7 +10,7 @@ déploiement automatique :
 ## 1. Cloner le projet sur le VPS
 
 ```bash
-git clone git@github.com:carlbrgs/Fiche-metier.git /opt/fiche-metier
+git clone git@github.com:AMNYOS-Consultants/Fiche-metier.git /opt/fiche-metier
 ```
 
 Le dépôt étant privé, l'accès en lecture se fait par une [deploy

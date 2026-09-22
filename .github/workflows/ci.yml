@@ -136,8 +136,8 @@ jobs:
           context: ./back
           push: true
           tags: |
-            ghcr.io/carlbrgs/fiche-metier-back:${{ github.sha }}
-            ghcr.io/carlbrgs/fiche-metier-back:latest
+            ghcr.io/amnyos-consultants/fiche-metier-back:${{ github.sha }}
+            ghcr.io/amnyos-consultants/fiche-metier-back:latest
           cache-from: type=gha,scope=back
           cache-to: type=gha,scope=back,mode=max
 
@@ -146,8 +146,8 @@ jobs:
           context: ./front
           push: true
           tags: |
-            ghcr.io/carlbrgs/fiche-metier-front:${{ github.sha }}
-            ghcr.io/carlbrgs/fiche-metier-front:latest
+            ghcr.io/amnyos-consultants/fiche-metier-front:${{ github.sha }}
+            ghcr.io/amnyos-consultants/fiche-metier-front:latest
           cache-from: type=gha,scope=front
           cache-to: type=gha,scope=front,mode=max
 
