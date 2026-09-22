@@ -1,0 +1,101 @@
+name: CI
+
+# Sur chaque push et pull request vers main. Deux jobs indépendants (back, front) qui
+# tournent en parallèle — l'un ne dépend pas du résultat de l'autre.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  back:
+    name: Back — typecheck & tests
+    runs-on: ubuntu-latest
+
+    # Base de données jetable, propre à ce run : GitHub Actions la démarre, attend qu'elle
+    # réponde (le même script `healthcheck.sh` que docker-compose.yml utilise en local),
+    # puis l'expose sur 127.0.0.1:3306 pour les étapes suivantes.
+    services:
+      mariadb:
+        image: mariadb:11
+        env:
+          MARIADB_ROOT_PASSWORD: rootpwd
+          MARIADB_DATABASE: fiche_metiers
+          MARIADB_USER: fiche
+          MARIADB_PASSWORD: fichepwd
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      NODE_ENV: test
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_NAME: fiche_metiers
+      DB_USER: fiche
+      DB_PASSWORD: fichepwd
+      DB_LOGGING: 'false'
+      CORS_ORIGIN: http://localhost:5173
+      # Identifiants de session propres à ce run — sans rapport avec ceux d'une instance
+      # réelle, cf. back/.env.example.
+      AUTH_USERNAME: admin
+      AUTH_PASSWORD: mot-de-passe-ci
+      AUTH_SESSION_SECRET: secret-de-session-ci-suffisamment-long-pour-signer-le-cookie
+
+    defaults:
+      run:
+        working-directory: back
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: back/package-lock.json
+
+      - run: npm ci
+
+      - run: npm run typecheck
+      - run: npm run test:typecheck
+
+      # Peuple la base à partir du classeur d'échange (`tests/fixtures/base-complete.xlsx`,
+      # une image de la base réelle) plutôt que de réimporter les classeurs sources bruts :
+      # ~10 s contre ~2 min 30, et c'est le chemin déjà couvert par
+      # `tests/classeur.test.ts`. `npm run import:excel` reste la voie de bootstrap si le
+      # fixture doit un jour être régénéré depuis des données de branche mises à jour — voir
+      # `back/tests/fixtures/README.md`.
+      - name: Peupler la base de test
+        run: |
+          npm run db:migrate
+          npm run db:import-classeur -- tests/fixtures/base-complete.xlsx
+          npm run db:recalc-proximites
+
+      - run: npm test
+
+  front:
+    name: Front — typecheck & build
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: front
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: front/package-lock.json
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build

@@ -70,7 +70,13 @@ npm run test:watch  # mode watch, pour le développement
 
 ## Intégration CI/CD
 
-Pas encore câblé dans une pipeline. `npm test` (dans `back/`) est le point d'entrée à
-appeler ; il faut juste qu'une MariaDB migrée et importée soit joignable via les variables
-`DB_*` au moment du run (service container MariaDB + `npm run db:migrate` + un import ou un
-dump de fixture, selon ce qui est le plus pratique à ce moment-là).
+`.github/workflows/ci.yml` — deux jobs indépendants sur push et pull request vers `main` :
+
+- **back** : `typecheck`, `test:typecheck`, puis une base MariaDB jetable (service
+  container) peuplée via le fixture `tests/fixtures/base-complete.xlsx`
+  (`db:migrate` + `db:import-classeur` + `db:recalc-proximites`, ~20 s au total — voir
+  `tests/fixtures/README.md`), puis `npm test`.
+- **front** : `typecheck` puis `build`.
+
+Aucun step de lint : ni `back/` ni `front/` n'ont eslint installé aujourd'hui (le script
+`lint` de `back/package.json` référence un paquet absent).

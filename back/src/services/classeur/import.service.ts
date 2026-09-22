@@ -584,31 +584,56 @@ async function supprimer(
   }
 }
 
+/** Lignes par lot d'INSERT — assez pour limiter les aller-retours réseau, assez peu pour
+ *  rester loin de `max_allowed_packet` même sur la table la plus large (25 colonnes). */
+const TAILLE_LOT_INSERT = 500;
+
+/**
+ * Insère `plan.ajouts` en lots plutôt qu'une requête par ligne : sur un premier
+ * peuplement (fixture de test, restauration), les lignes à insérer se comptent en
+ * dizaines de milliers, et un aller-retour réseau par ligne dominait le temps total —
+ * mesuré à 2m30 pour 49 000 lignes, soit le même ordre de grandeur qu'un réimport complet
+ * depuis les classeurs sources bruts, ce qui videait l'intérêt du classeur d'échange.
+ *
+ * Le lot exige une liste de colonnes identique sur toutes ses lignes. Or une colonne
+ * NOT NULL laissée vide doit recevoir le défaut de la base plutôt qu'un NULL refusé — et
+ * ce défaut peut différer d'une ligne à l'autre (`created_at` vaut l'instant de chaque
+ * INSERT). On fixe donc la liste de colonnes une fois pour la table, et on écrit le
+ * mot-clé SQL `DEFAULT` en clair dans le VALUES pour ces cas, plutôt qu'une valeur liée —
+ * un paramètre ne peut pas porter ce mot-clé.
+ */
 async function inserer(
   plan: Plan,
   base: Map<string, ColonneBase>,
   motsCles: Map<string, number>,
   transaction: Transaction,
 ): Promise<void> {
-  for (const ligne of plan.ajouts) {
-    const colonnes: string[] = [];
-    const jetons: string[] = [];
-    const valeurs: Record<string, unknown> = {};
+  if (plan.ajouts.length === 0) return;
 
-    plan.table.colonnes.filter((c) => !c.informative).forEach((c, i) => {
-      const nom = c.resolue ? 'mot_cle_id' : colonneSql(c);
-      const valeur = c.resolue ? motsCles.get(String(ligne[c.champ])) : pourSql(ligne[c.champ]);
-      // Une colonne NOT NULL laissée vide (les horodatages, surtout) est omise : la base
-      // applique son défaut, là où écrire NULL serait refusé.
-      const nullable = base.get(`${plan.table.table}.${nom}`)?.nullable ?? true;
-      if (valeur === null && !nullable) return;
-      colonnes.push(nom);
-      jetons.push(`:v${i}`);
-      valeurs[`v${i}`] = valeur;
+  const colonnes = plan.table.colonnes.filter((c) => !c.informative);
+  const noms = colonnes.map((c) => (c.resolue ? 'mot_cle_id' : colonneSql(c)));
+  const nullables = noms.map(
+    (nom) => base.get(`${plan.table.table}.${nom}`)?.nullable ?? true,
+  );
+
+  for (let debut = 0; debut < plan.ajouts.length; debut += TAILLE_LOT_INSERT) {
+    const lot = plan.ajouts.slice(debut, debut + TAILLE_LOT_INSERT);
+    const valeurs: Record<string, unknown> = {};
+    const lignesSql: string[] = [];
+
+    lot.forEach((ligne, i) => {
+      const jetons = colonnes.map((c, j) => {
+        const valeur = c.resolue ? motsCles.get(String(ligne[c.champ])) : pourSql(ligne[c.champ]);
+        if (valeur === null && !nullables[j]) return 'DEFAULT';
+        const cle = `v${i}_${j}`;
+        valeurs[cle] = valeur;
+        return `:${cle}`;
+      });
+      lignesSql.push(`(${jetons.join(', ')})`);
     });
 
     await sequelize.query(
-      `INSERT INTO ${plan.table.table} (${colonnes.join(', ')}) VALUES (${jetons.join(', ')})`,
+      `INSERT INTO ${plan.table.table} (${noms.join(', ')}) VALUES ${lignesSql.join(', ')}`,
       { replacements: valeurs, type: QueryTypes.INSERT, transaction },
     );
   }

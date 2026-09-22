@@ -212,21 +212,34 @@ async function importerAppellations(
 }
 
 /**
+ * Codes ROME saisis tronqués dans `Outil_collecte_fiche_metier`, corrigés au vu du
+ * référentiel officiel (`docs/rome-arborescence-principale-juin-2026.xlsx`, importé par
+ * `rome.importer.ts`) plutôt qu'en base à la main — sans quoi la correction ne survivait
+ * pas à un réimport complet (constaté : elle avait été appliquée par un `UPDATE` ponctuel,
+ * absente de tout import frais, y compris en CI).
+ */
+const CODES_ROME_CORRIGES: Record<string, string> = {
+  I130: 'I1304',
+};
+
+/**
  * Découpe une cellule ROME en code et libellé.
  *
  * Formes rencontrées : « A1413 », « H2102 – Conduite d'équipement… », mais aussi
- * « D 1213 » et « D 1407 » (espace parasite) et « I130 » (quatre caractères).
- * L'espace est retiré ; les codes hors norme sont conservés tels quels plutôt
- * qu'écartés — ils désignent de vraies fiches, mal saisies.
+ * « D 1213 » et « D 1407 » (espace parasite) et « I130 » (quatre caractères, corrigé via
+ * `CODES_ROME_CORRIGES`). Les codes hors norme non répertoriés sont conservés tels
+ * quels plutôt qu'écartés — ils désignent de vraies fiches, mal saisies.
  */
 function analyserRome(brut: string): { code: string; libelle: string | null } {
   const sansEspace = brut.replace(/^([A-Z])\s+(\d)/, '$1$2').trim();
   const avecLibelle = sansEspace.match(/^([A-Z]\d{4})\s*[–\-—]\s*(.+)$/);
 
   if (avecLibelle) {
-    return { code: avecLibelle[1], libelle: avecLibelle[2].trim() };
+    const code = avecLibelle[1];
+    return { code: CODES_ROME_CORRIGES[code] ?? code, libelle: avecLibelle[2].trim() };
   }
-  return { code: sansEspace.match(/^[A-Z]\d{4}/)?.[0] ?? sansEspace.slice(0, 10), libelle: null };
+  const code = sansEspace.match(/^[A-Z]\d{4}/)?.[0] ?? sansEspace.slice(0, 10);
+  return { code: CODES_ROME_CORRIGES[code] ?? code, libelle: null };
 }
 
 async function importerRome(
