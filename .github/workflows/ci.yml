@@ -1,12 +1,22 @@
 name: CI
 
-# Sur chaque push et pull request vers main. Deux jobs indépendants (back, front) qui
-# tournent en parallèle — l'un ne dépend pas du résultat de l'autre.
+# `back` et `front` tournent en parallèle sur chaque push et pull request vers main.
+# `build-and-push` et `deploy` s'enchaînent ensuite (`needs:`), mais seulement sur un push
+# vers main — jamais sur une pull request, qui ne doit jamais toucher la prod — et
+# seulement si `back` et `front` ont réussi : on ne publie ni ne déploie un commit dont les
+# tests échouent.
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+
+# `packages: write` (déploiement) — GITHUB_TOKEN sert à la fois à publier les images
+# (build-and-push) et à les tirer depuis le VPS (deploy) : pas de secret de registre
+# séparé à gérer. `contents: read` suffit aux deux, `id-token` n'est pas utilisé.
+permissions:
+  contents: read
+  packages: write
 
 jobs:
   back:
@@ -99,3 +109,96 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run build
+
+  build-and-push:
+    name: Build & publie les images
+    needs: [back, front]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Deux tags par image : le SHA du commit (ce que `deploy` tire explicitement — voir
+      # docker-compose.prod.yml) et `latest` (alias pratique pour un déploiement manuel).
+      # `latest` seul ne dirait jamais avec certitude quel commit tourne en prod, ni ne
+      # permettrait de revenir en arrière en visant un SHA précis.
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./back
+          push: true
+          tags: |
+            ghcr.io/carlbrgs/fiche-metier-back:${{ github.sha }}
+            ghcr.io/carlbrgs/fiche-metier-back:latest
+          cache-from: type=gha,scope=back
+          cache-to: type=gha,scope=back,mode=max
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./front
+          push: true
+          tags: |
+            ghcr.io/carlbrgs/fiche-metier-front:${{ github.sha }}
+            ghcr.io/carlbrgs/fiche-metier-front:latest
+          cache-from: type=gha,scope=front
+          cache-to: type=gha,scope=front,mode=max
+
+  deploy:
+    name: Déploiement VPS
+    needs: build-and-push
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      # La clé privée est stockée encodée en base64 (`VPS_SSH_KEY_B64`) : un secret
+      # GitHub Actions est une chaîne à une ligne, et une clé PEM en porte plusieurs —
+      # l'encodage évite tout risque qu'un saut de ligne se perde à la saisie du secret.
+      - name: Installer la clé SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY_B64 }}" | base64 -d > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+
+      # `set -e` : la moindre commande en échec (git pull, login au registre, pull d'image)
+      # arrête le script plutôt que de continuer sur un état incohérent — ce que l'absence
+      # de `set -e` laisserait passer silencieusement.
+      #
+      # `IMAGE_TAG` fixe explicitement le SHA à déployer : `docker-compose.prod.yml` le lit
+      # via `${IMAGE_TAG:-latest}`, donc ce déploiement tire précisément l'image que
+      # `build-and-push` vient de publier, jamais un `latest` qui aurait pu changer entre
+      # temps. Le `.env` de production (mots de passe, `AUTH_SESSION_SECRET`…) vit sur le
+      # VPS et n'est jamais lu ni transporté par la CI — voir docs/deploiement.md.
+      #
+      # Le healthcheck final interroge 127.0.0.1 : `back` n'est plus exposé que sur cette
+      # interface par `docker-compose.prod.yml` (voir ce fichier), donc seul le VPS
+      # lui-même peut le joindre — cohérent avec l'exécution de ce script en SSH dessus.
+      - name: Déployer sur le VPS
+        run: |
+          ssh -i ~/.ssh/id_rsa ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
+            set -e
+            cd /opt/fiche-metier
+            git pull origin main
+
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            export IMAGE_TAG=${{ github.sha }}
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile app pull
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile app up -d
+            docker logout ghcr.io
+
+            curl --retry 10 --retry-delay 3 --retry-connrefused --fail http://127.0.0.1:4000/api/health
+
+            # Ne purge que ce qui n'a plus été touché depuis 3 jours : jamais l'image qui
+            # vient d'être tirée, mais évite que le disque du VPS se remplisse au fil des
+            # déploiements successifs.
+            docker image prune -af --filter "until=72h"
+          EOF
+

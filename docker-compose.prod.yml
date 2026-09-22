@@ -1,0 +1,67 @@
+# Overlay de production — usage :
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile app pull
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile app up -d
+#
+# Ne remplace jamais docker-compose.yml : il vient s'y superposer. Deux différences avec
+# le fichier de dev :
+#
+# 1. `back` et `front` passent de `build:` (image reconstruite localement) à `image:`
+#    (image déjà publiée sur ghcr.io par la CI) — le VPS ne recompile jamais rien, il tire
+#    une image déjà testée. `IMAGE_TAG` est le SHA du commit déployé (fixé par la CI au
+#    moment du déploiement) ; à défaut de valeur, `latest` — pratique pour un déploiement
+#    manuel, mais la CI fixe toujours un SHA explicite : `latest` est mutable, un tag SHA
+#    permet de savoir avec certitude ce qui tourne, et de revenir en arrière en repointant
+#    sur le SHA précédent.
+#
+# 2. `db` et `adminer` ne sont plus exposés que sur `127.0.0.1` (accessible en admin via
+#    un tunnel SSH — `ssh -L 3306:127.0.0.1:3306 …` — jamais depuis l'extérieur). En dev,
+#    `0.0.0.0` est nécessaire pour y accéder depuis la machine hôte hors Docker ; sur un
+#    VPS avec IP publique, ça exposerait une base de données directement sur internet.
+#    `back` perd carrément son port publié : le front le joint via le réseau Docker
+#    interne (`http://back:4000`, voir front/nginx.conf), aucune raison de l'exposer.
+#
+# `front` reste sur `0.0.0.0` : c'est la seule porte d'entrée publique de la pile. Si un
+# reverse proxy (domaine + TLS) est ajouté devant plus tard, ce sera à lui de n'écouter
+# que sur `127.0.0.1`, pas à ce fichier de le deviner.
+#
+# 3. Les identifiants (mots de passe DB, compte de connexion, secret de session) perdent
+#    leur valeur par défaut. `docker-compose.yml` en garde une (`changez-moi`,
+#    `fichepwd`…) pour qu'un `docker compose up` fonctionne dès le clone, sans .env — utile
+#    en dev, dangereux en prod : ces valeurs sont visibles par quiconque lit le dépôt, donc
+#    un `.env` de production incomplet démarrerait silencieusement avec un mot de passe
+#    public plutôt que d'échouer. `${VAR:?message}` fait échouer `docker compose` avec ce
+#    message si la variable manque, au lieu de retomber dessus.
+
+services:
+  back:
+    build: !reset null
+    image: ghcr.io/carlbrgs/fiche-metier-back:${IMAGE_TAG:-latest}
+    # `!override` : Compose fusionne les listes par défaut (il aurait sinon ajouté cette
+    # entrée à celle de docker-compose.yml au lieu de la remplacer — le port serait resté
+    # publié sur 0.0.0.0 *en plus* de 127.0.0.1, exactement ce que ce fichier doit éviter).
+    ports: !override
+      - "127.0.0.1:${BACK_PORT:-4000}:4000"
+    # `environment:` est un mapping, pas une liste : Compose le fusionne clé par clé, donc
+    # redéclarer seulement celles-ci suffit à remplacer leur valeur par défaut — pas besoin
+    # de `!override` ici, ni de répéter les clés déjà correctes (DB_HOST, PORT, NODE_ENV…).
+    environment:
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD manquant dans .env}
+      AUTH_USERNAME: ${AUTH_USERNAME:?AUTH_USERNAME manquant dans .env}
+      AUTH_PASSWORD: ${AUTH_PASSWORD:?AUTH_PASSWORD manquant dans .env}
+      AUTH_SESSION_SECRET: ${AUTH_SESSION_SECRET:?AUTH_SESSION_SECRET manquant dans .env}
+
+  front:
+    build: !reset null
+    image: ghcr.io/carlbrgs/fiche-metier-front:${IMAGE_TAG:-latest}
+
+  db:
+    ports: !override
+      - "127.0.0.1:${DB_PORT:-3306}:3306"
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD manquant dans .env}
+      MARIADB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD manquant dans .env}
+
+  adminer:
+    ports: !override
+      - "127.0.0.1:8081:8080"
