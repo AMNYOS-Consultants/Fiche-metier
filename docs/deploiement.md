@@ -10,7 +10,7 @@ déploiement automatique :
 ## 1. Cloner le projet sur le VPS
 
 ```bash
-git clone git@github.com:AMNYOS-Consultants/Fiche-metier.git /opt/fiche-metier
+git clone git@github.com:AMNYOS-Consultants/Fiche-metier.git /var/www/Fiche-metier
 ```
 
 Le dépôt étant privé, l'accès en lecture se fait par une [deploy
@@ -20,12 +20,12 @@ personnel — c'est elle que `git pull origin main` réutilise à chaque déploi
 
 ## 2. Déposer le `.env` de production
 
-À la racine du clone (`/opt/fiche-metier/.env`) — **jamais dans le dépôt, jamais transporté
+À la racine du clone (`/var/www/Fiche-metier/.env`) — **jamais dans le dépôt, jamais transporté
 par la CI**. C'est le fichier que Docker Compose charge automatiquement pour résoudre les
 `${VARIABLE}` de `docker-compose.yml` et `docker-compose.prod.yml`.
 
 Le VPS héberge la même instance que celle utilisée en local : copier le `.env` déjà présent
-à la racine du projet local (`scp .env <utilisateur>@<vps>:/opt/fiche-metier/.env`), plutôt
+à la racine du projet local (`scp .env <utilisateur>@<vps>:/var/www/Fiche-metier/.env`), plutôt
 que d'en écrire un nouveau avec des identifiants différents.
 
 `docker-compose.prod.yml` rend obligatoires les variables sensibles
@@ -86,7 +86,7 @@ La toute première fois, avant de laisser la CI s'en charger — le temps de vé
 tout est en place :
 
 ```bash
-cd /opt/fiche-metier
+cd /var/www/Fiche-metier
 docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile app pull
 docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile app up -d
 ```
