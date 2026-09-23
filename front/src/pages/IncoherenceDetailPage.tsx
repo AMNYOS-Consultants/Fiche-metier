@@ -279,10 +279,12 @@ export function IncoherenceDetailPage() {
                   <ul className="encart-metiers__liste">
                     {v.metiers.map((m) => (
                       <li key={m.coupleId}>
-                        <Link to={`/metiers/${encodeURIComponent(m.codeMetier)}`}>
-                          {m.intitule} <span className="detail">({m.codeMetier})</span>
-                        </Link>
-                        <span className="detail">Modifié : {dateModification(m.modifieLe)}</span>
+                        <div className="encart-metiers__entete">
+                          <Link to={`/metiers/${encodeURIComponent(m.codeMetier)}`}>
+                            {m.intitule} <span className="detail">({m.codeMetier})</span>
+                          </Link>
+                          <span className="detail">Modifié : {dateModification(m.modifieLe)}</span>
+                        </div>
                         {m.motsCles.length > 0 && (
                           <ul className="badges">
                             {m.motsCles.map((mot) => (
@@ -292,32 +294,34 @@ export function IncoherenceDetailPage() {
                             ))}
                           </ul>
                         )}
-                        {dcCoupleId !== m.coupleId && (
-                          <button
-                            type="button"
-                            className="lien-discret"
-                            onClick={() => {
-                              setDcCoupleId(m.coupleId);
-                              setMcCoupleId(null);
-                            }}
-                            disabled={actionEnCours}
-                          >
-                            Modifier ses domaines
-                          </button>
-                        )}
-                        {mcCoupleId !== m.coupleId && (
-                          <button
-                            type="button"
-                            className="lien-discret"
-                            onClick={() => {
-                              setMcCoupleId(m.coupleId);
-                              setDcCoupleId(null);
-                            }}
-                            disabled={actionEnCours}
-                          >
-                            Modifier ses mots-clés
-                          </button>
-                        )}
+                        <div className="encart-metiers__actions">
+                          {dcCoupleId !== m.coupleId && (
+                            <button
+                              type="button"
+                              className="lien-discret"
+                              onClick={() => {
+                                setDcCoupleId(m.coupleId);
+                                setMcCoupleId(null);
+                              }}
+                              disabled={actionEnCours}
+                            >
+                              Modifier ses domaines
+                            </button>
+                          )}
+                          {mcCoupleId !== m.coupleId && (
+                            <button
+                              type="button"
+                              className="lien-discret"
+                              onClick={() => {
+                                setMcCoupleId(m.coupleId);
+                                setDcCoupleId(null);
+                              }}
+                              disabled={actionEnCours}
+                            >
+                              Modifier ses mots-clés
+                            </button>
+                          )}
+                        </div>
                         {mcCoupleId === m.coupleId && (
                           <EditeurMotsCles
                             codeActivite={code}
