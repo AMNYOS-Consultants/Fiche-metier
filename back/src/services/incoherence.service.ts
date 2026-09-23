@@ -8,6 +8,8 @@ import {
   CompetenceDetail,
   NiveauMaitrise,
   ActiviteConnaissance,
+  MotCle,
+  Formacode,
 } from '../models';
 import { HttpError } from '../types/api';
 import { marquerProximitePerimee } from './passerelle.service';
@@ -20,9 +22,18 @@ import { marquerProximitePerimee } from './passerelle.service';
  * n'empêche deux métiers qui partagent un code de diverger sur leur contenu — c'est le cas
  * pour une partie du catalogue (voir couple.service.ts, « 138 des 279 codes partagés »).
  *
- * Les mots-clés sont volontairement exclus de la comparaison et de l'harmonisation :
- * décision explicite, ils ne sont pas considérés comme faisant partie du « contenu » du
- * couple pour cet usage.
+ * Trois éléments seulement définissent si deux rédactions sont « la même » : l'intitulé et
+ * les détails (la description), les domaines de connaissance (juste le formacode et son
+ * niveau — la durée et sa justification n'entrent pas en compte : elles ne sont pas une
+ * donnée exploitée ailleurs dans l'application, les inclure ne faisait que scinder en deux
+ * variantes des rédactions par ailleurs identiques, sur la seule présence ou non d'une
+ * note de justification), et les mots-clés.
+ *
+ * Restent hors comparaison, donc capables de différer au sein d'une même variante sans
+ * déclencher d'incohérence : les niveaux de maîtrise (affichés et édités depuis le couple
+ * modèle de la variante, comme avant ce changement — « Appliquer à tous » les aligne
+ * toujours explicitement, c'est son rôle), le NSF, le caractère fondamental d'un domaine,
+ * et bien sûr la durée/justification déjà citées.
  */
 
 interface ContenuComparable {
@@ -30,15 +41,8 @@ interface ContenuComparable {
   intituleCompetence: string | null;
   detailsActivite: string[];
   detailsCompetence: string[];
-  niveauxMaitrise: Array<{ niveau: number; description: string }>;
-  connaissances: Array<{
-    codeFormacode: string;
-    niveau: number | null;
-    dureeHeures: number | null;
-    justificationDuree: string | null;
-    codeNsf: string | null;
-    estFondamental: boolean;
-  }>;
+  connaissances: Array<{ codeFormacode: string; niveau: number | null }>;
+  motsCles: string[];
 }
 
 /** Une ligne `metier_activite` telle que chargée avec tout ce qui compte pour la comparaison. */
@@ -50,8 +54,12 @@ interface CoupleCharge {
   /** `null` pour les couples antérieurs à la migration 012. */
   modifieLe: Date | null;
   contenu: ContenuComparable;
+  /** Hors de `contenu`, donc hors comparaison — voir l'en-tête du fichier. */
+  niveauxMaitrise: Array<{ niveau: number; description: string }>;
   /** Domaines de connaissance avec leur intitulé — utile à l'affichage, pas à la comparaison. */
   connaissancesAffichage: Array<{ codeFormacode: string; intitule: string | null; niveau: number | null }>;
+  /** Hors de `contenu` : exclus de la comparaison des rédactions, voir l'en-tête du fichier. */
+  motsCles: string[];
 }
 
 async function chargerCouples(codeActivite?: string): Promise<CoupleCharge[]> {
@@ -62,7 +70,19 @@ async function chargerCouples(codeActivite?: string): Promise<CoupleCharge[]> {
       { model: ActiviteDetail, as: 'detailsActivite', separate: true, order: [['ordre', 'ASC']] },
       { model: CompetenceDetail, as: 'detailsCompetence', separate: true, order: [['ordre', 'ASC']] },
       { model: NiveauMaitrise, as: 'niveauxMaitrise', separate: true, order: [['niveau', 'ASC']] },
-      { model: ActiviteConnaissance, as: 'connaissances', separate: true, order: [['ordre', 'ASC']] },
+      {
+        model: ActiviteConnaissance,
+        as: 'connaissances',
+        separate: true,
+        order: [['ordre', 'ASC']],
+        // `intitule` du couple est dénormalisé, saisi dans la collecte, et vide sur une
+        // partie des lignes (constaté : vide pour 7 métiers sur 16 d'un même code, alors
+        // qu'ils partagent les mêmes formacodes) — le référentiel, lui, l'a toujours.
+        include: [{ model: Formacode, as: 'formacode', attributes: ['intitule'] }],
+      },
+      // `belongsToMany` ne supporte pas `separate: true` : triés après coup, ci-dessous,
+      // sur l'attribut `ordre` de la table de jonction (through).
+      { model: MotCle, as: 'motsCles', through: { attributes: ['ordre'] } },
     ],
     order: [['codeMetier', 'ASC']],
   });
@@ -81,10 +101,15 @@ async function chargerCouples(codeActivite?: string): Promise<CoupleCharge[]> {
         justificationDuree: string | null;
         codeNsf: string | null;
         estFondamental: boolean;
+        formacode?: { intitule: string } | null;
       }>;
+      motsCles?: Array<{ libelle: string; ActiviteMotCle: { ordre: number } }>;
     };
 
     const connaissances = brut.connaissances ?? [];
+    const motsCles = [...(brut.motsCles ?? [])]
+      .sort((a, b) => a.ActiviteMotCle.ordre - b.ActiviteMotCle.ordre)
+      .map((m) => m.libelle);
 
     return {
       id: c.id,
@@ -92,27 +117,29 @@ async function chargerCouples(codeActivite?: string): Promise<CoupleCharge[]> {
       codeActivite: c.codeActivite,
       intituleMetier: brut.metier?.intitule ?? c.codeMetier,
       modifieLe: c.updatedAt ?? null,
+      motsCles,
+      niveauxMaitrise: (brut.niveauxMaitrise ?? [])
+        .map((n) => ({ niveau: n.niveau, description: n.description }))
+        .sort((a, b) => a.niveau - b.niveau),
       contenu: {
         intituleActivite: c.intituleActivite,
         intituleCompetence: c.intituleCompetence,
         detailsActivite: (brut.detailsActivite ?? []).map((d) => d.libelle),
         detailsCompetence: (brut.detailsCompetence ?? []).map((d) => d.libelle),
-        niveauxMaitrise: (brut.niveauxMaitrise ?? [])
-          .map((n) => ({ niveau: n.niveau, description: n.description }))
-          .sort((a, b) => a.niveau - b.niveau),
         connaissances: connaissances
-          .map((k) => ({
-            codeFormacode: k.codeFormacode,
-            niveau: k.niveau,
-            dureeHeures: k.dureeHeures !== null ? Number(k.dureeHeures) : null,
-            justificationDuree: k.justificationDuree,
-            codeNsf: k.codeNsf,
-            estFondamental: k.estFondamental,
-          }))
+          .map((k) => ({ codeFormacode: k.codeFormacode, niveau: k.niveau }))
           .sort((a, b) => a.codeFormacode.localeCompare(b.codeFormacode)),
+        // Triés pour la signature : l'ordre de saisie des mots-clés ne doit pas, à lui
+        // seul, faire apparaître deux couples comme divergents. `motsCles` (ci-dessus,
+        // hors `contenu`) garde lui l'ordre réel, pour l'affichage et l'édition.
+        motsCles: [...motsCles].sort(),
       },
       connaissancesAffichage: connaissances
-        .map((k) => ({ codeFormacode: k.codeFormacode, intitule: k.intitule, niveau: k.niveau }))
+        .map((k) => ({
+          codeFormacode: k.codeFormacode,
+          intitule: k.formacode?.intitule ?? k.intitule,
+          niveau: k.niveau,
+        }))
         .sort((a, b) => a.codeFormacode.localeCompare(b.codeFormacode)),
     };
   });
@@ -173,6 +200,9 @@ export interface VarianteDetaillee {
     intitule: string;
     /** Dernière modification de la rédaction de CE couple. */
     modifieLe: Date | null;
+    /** Hors comparaison des rédactions (voir l'en-tête du fichier) : peut différer d'un
+     *  métier à l'autre au sein d'une même variante. */
+    motsCles: string[];
   }>;
   intituleActivite: string | null;
   intituleCompetence: string | null;
@@ -198,7 +228,7 @@ export async function obtenirVariantes(codeActivite: string): Promise<VarianteDe
         intituleCompetence: c.contenu.intituleCompetence,
         detailsActivite: c.contenu.detailsActivite,
         detailsCompetence: c.contenu.detailsCompetence,
-        niveauxMaitrise: c.contenu.niveauxMaitrise,
+        niveauxMaitrise: c.niveauxMaitrise,
         connaissances: c.connaissancesAffichage,
       });
     }
@@ -207,6 +237,7 @@ export async function obtenirVariantes(codeActivite: string): Promise<VarianteDe
       codeMetier: c.codeMetier,
       intitule: c.intituleMetier,
       modifieLe: c.modifieLe,
+      motsCles: c.motsCles,
     });
   }
 

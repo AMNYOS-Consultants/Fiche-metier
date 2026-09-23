@@ -20,7 +20,7 @@ permissions:
 
 jobs:
   back:
-    name: Back — typecheck & tests
+    name: Back typecheck & tests
     runs-on: ubuntu-latest
 
     # Base de données jetable, propre à ce run : GitHub Actions la démarre, attend qu'elle
@@ -90,7 +90,7 @@ jobs:
       - run: npm test
 
   front:
-    name: Front — typecheck & build
+    name: Front typecheck & build
     runs-on: ubuntu-latest
 
     defaults:
@@ -111,7 +111,7 @@ jobs:
       - run: npm run build
 
   build-and-push:
-    name: Build & publie les images
+    name: Build & images push
     needs: [back, front]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -152,7 +152,7 @@ jobs:
           cache-to: type=gha,scope=front,mode=max
 
   deploy:
-    name: Déploiement VPS
+    name: VPS Deployment
     needs: build-and-push
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest

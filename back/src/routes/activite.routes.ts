@@ -12,6 +12,7 @@ import {
   scinder,
   modifierRedaction,
   modifierConnaissances,
+  modifierMotsCles,
 } from '../controllers/incoherence.controller';
 import { creer as creerCouple } from '../controllers/couple.controller';
 
@@ -35,3 +36,4 @@ activiteRoutes.post('/:codeActivite/scinder', asyncHandler(scinder));
 // autres), et les domaines de connaissance d'un couple (ils pendent du couple, pas du code).
 activiteRoutes.put('/:codeActivite/redaction', asyncHandler(modifierRedaction));
 activiteRoutes.put('/:codeActivite/couples/:id/connaissances', asyncHandler(modifierConnaissances));
+activiteRoutes.put('/:codeActivite/couples/:id/mots-cles', asyncHandler(modifierMotsCles));

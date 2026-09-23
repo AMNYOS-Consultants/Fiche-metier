@@ -342,6 +342,8 @@ export interface VarianteDetaillee {
     intitule: string;
     /** Dernière modification de la rédaction de ce couple. */
     modifieLe?: string | null;
+    /** Hors comparaison des rédactions : peut différer d'un métier à l'autre. */
+    motsCles: string[];
   }>;
   intituleActivite: string | null;
   intituleCompetence: string | null;

@@ -7,6 +7,7 @@ import {
   FamilleActivite,
   Metier,
   MetierActivite,
+  MotCle,
 } from '../src/models';
 
 describe('Activités & compétences', () => {
@@ -316,6 +317,80 @@ describe('Édition depuis la page d’une activité', () => {
       // l'empreinte de la base soit inchangée après le test.
       await ActiviteConnaissance.destroy({ where: { metierActiviteId: coupleId } });
       if (initiales.length > 0) await ActiviteConnaissance.bulkCreate(initiales);
+    }
+  });
+
+  it('refuse un mot-clé envoyé en double', async () => {
+    const liste = await agent.get('/api/activites?limit=1').expect(200);
+    const code = liste.body.data[0].codeActivite;
+    const variantes = await agent
+      .get(`/api/activites/${encodeURIComponent(code)}/variantes`)
+      .expect(200);
+    const coupleId = variantes.body.data[0].metiers[0].coupleId;
+
+    const res = await agent
+      .put(`/api/activites/${encodeURIComponent(code)}/couples/${coupleId}/mots-cles`)
+      .send({ motsCles: ['Traçabilité', 'Traçabilité'] })
+      .expect(400);
+    expect(res.body.error.message).toMatch(/même mot-clé/);
+  });
+
+  it('refuse un couple qui n’appartient pas au code activité (mots-clés)', async () => {
+    const liste = await agent.get('/api/activites?limit=1').expect(200);
+    const code = liste.body.data[0].codeActivite;
+
+    await agent
+      .put(`/api/activites/${encodeURIComponent(code)}/couples/999999999/mots-cles`)
+      .send({ motsCles: [] })
+      .expect(404);
+  });
+
+  it('remplace les mots-clés d’un couple, résout et purge `mot_cle`', async () => {
+    const liste = await agent.get('/api/activites?limit=1').expect(200);
+    const code: string = liste.body.data[0].codeActivite;
+    const variantes = await agent
+      .get(`/api/activites/${encodeURIComponent(code)}/variantes`)
+      .expect(200);
+    const coupleId: number = variantes.body.data[0].metiers[0].coupleId;
+
+    // Snapshot des LIBELLÉS, pas des id : `ecrireMotsCles` purge tout mot-clé devenu
+    // orphelin, y compris parmi ceux qu'on retire ici. Restaurer par id (`bulkCreate`
+    // direct) risquerait de viser un `mot_cle` qui n'existe plus — constaté une fois : un
+    // couple réel a perdu ses mots-clés le temps de le découvrir et de les restaurer à la
+    // main. La restauration repasse donc par l'API, qui recrée ce qu'il faut.
+    const initiales: string[] = variantes.body.data[0].metiers[0].motsCles;
+
+    // Un libellé déjà connu, réutilisé sans recréation, et un inédit — pour exercer les
+    // deux chemins de `ecrireMotsCles` (résolution existante / création).
+    const existant = await MotCle.findOne();
+    const nouveauLibelle = 'ZZTEST mot-clé de test';
+
+    try {
+      const res = await agent
+        .put(`/api/activites/${encodeURIComponent(code)}/couples/${coupleId}/mots-cles`)
+        .send({ motsCles: [existant!.libelle, nouveauLibelle] })
+        .expect(200);
+
+      expect(res.body.data).toEqual([existant!.libelle, nouveauLibelle]);
+
+      const cree = await MotCle.findOne({ where: { libelle: nouveauLibelle } });
+      expect(cree).not.toBeNull();
+
+      // Relecture par l'API de vérification (obtenirVariantes) : le champ doit refléter
+      // exactement ce qui vient d'être écrit, pas une valeur mise en cache.
+      const relu = await agent
+        .get(`/api/activites/${encodeURIComponent(code)}/variantes`)
+        .expect(200);
+      const metierRelu = relu.body.data
+        .flatMap((v: { metiers: Array<{ coupleId: number; motsCles: string[] }> }) => v.metiers)
+        .find((m: { coupleId: number }) => m.coupleId === coupleId);
+      expect(metierRelu.motsCles).toEqual([existant!.libelle, nouveauLibelle]);
+    } finally {
+      // Restauration par l'API : `nouveauLibelle` en sera automatiquement purgé (devenu
+      // orphelin), et un original qui aurait été purgé entre-temps serait recréé.
+      await agent
+        .put(`/api/activites/${encodeURIComponent(code)}/couples/${coupleId}/mots-cles`)
+        .send({ motsCles: initiales });
     }
   });
 });

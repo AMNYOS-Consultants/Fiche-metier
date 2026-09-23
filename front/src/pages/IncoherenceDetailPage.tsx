@@ -6,6 +6,7 @@ import { useFetch } from '@/hooks/useFetch';
 import { Loader } from '@/components/Loader';
 import { ErrorMessage } from '@/components/ErrorMessage';
 import { EditeurConnaissances } from '@/components/EditeurConnaissances';
+import { EditeurMotsCles } from '@/components/EditeurMotsCles';
 import {
   FormulaireRedaction,
   redactionDepuis,
@@ -38,6 +39,8 @@ export function IncoherenceDetailPage() {
   const [edition, setEdition] = useState<Redaction | null>(null);
   /** Couple dont on édite les domaines de connaissance (indépendant de la rédaction). */
   const [dcCoupleId, setDcCoupleId] = useState<number | null>(null);
+  /** Couple dont on édite les mots-clés (indépendant de la rédaction). */
+  const [mcCoupleId, setMcCoupleId] = useState<number | null>(null);
   const [actionEnCours, setActionEnCours] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const [succes, setSucces] = useState<string | null>(null);
@@ -59,6 +62,7 @@ export function IncoherenceDetailPage() {
       setEdition(redactionDepuis(v));
     }
     setDcCoupleId(null);
+    setMcCoupleId(null);
     setErreur(null);
     setSucces(null);
   }
@@ -142,8 +146,8 @@ export function IncoherenceDetailPage() {
         portent {code}, ou <strong>créer un couple</strong> — la rédaction est alors détachée
         vers un nouveau code du halo {halo(code)}, ce qui convient quand la divergence est
         légitime (deux métiers ne décrivent pas la même activité). Une confirmation est
-        demandée avant toute écriture. Les domaines de connaissance s’éditent séparément,
-        métier par métier, dans l’encart de chaque rédaction.
+        demandée avant toute écriture. Les domaines de connaissance et les mots-clés
+        s’éditent séparément, métier par métier, dans l’encart de chaque rédaction.
       </p>
 
       {succes && <p className="bandeau-alerte">{succes}</p>}
@@ -279,15 +283,54 @@ export function IncoherenceDetailPage() {
                           {m.intitule} <span className="detail">({m.codeMetier})</span>
                         </Link>
                         <span className="detail">Modifié : {dateModification(m.modifieLe)}</span>
+                        {m.motsCles.length > 0 && (
+                          <ul className="badges">
+                            {m.motsCles.map((mot) => (
+                              <li key={mot} className="badge">
+                                {mot}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
                         {dcCoupleId !== m.coupleId && (
                           <button
                             type="button"
                             className="lien-discret"
-                            onClick={() => setDcCoupleId(m.coupleId)}
+                            onClick={() => {
+                              setDcCoupleId(m.coupleId);
+                              setMcCoupleId(null);
+                            }}
                             disabled={actionEnCours}
                           >
                             Modifier ses domaines
                           </button>
+                        )}
+                        {mcCoupleId !== m.coupleId && (
+                          <button
+                            type="button"
+                            className="lien-discret"
+                            onClick={() => {
+                              setMcCoupleId(m.coupleId);
+                              setDcCoupleId(null);
+                            }}
+                            disabled={actionEnCours}
+                          >
+                            Modifier ses mots-clés
+                          </button>
+                        )}
+                        {mcCoupleId === m.coupleId && (
+                          <EditeurMotsCles
+                            codeActivite={code}
+                            coupleId={m.coupleId}
+                            motsCles={m.motsCles}
+                            onEnregistre={() => {
+                              setMcCoupleId(null);
+                              setSelectionneId(null);
+                              setEdition(null);
+                              setRecharger((n) => n + 1);
+                            }}
+                            onAnnule={() => setMcCoupleId(null)}
+                          />
                         )}
                       </li>
                     ))}

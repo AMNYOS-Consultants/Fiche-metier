@@ -203,6 +203,23 @@ export function modifierConnaissancesCouple(
 }
 
 /**
+ * Mots-clés d'UN couple (métier ↔ activité) : remplacement en bloc, même portée que les
+ * domaines de connaissance — ils peuvent différer d'un métier à l'autre pour un même code.
+ */
+export function modifierMotsClesCouple(
+  codeActivite: string,
+  coupleId: number,
+  motsCles: string[],
+  signal?: AbortSignal,
+) {
+  return apiPut<{ data: string[] }>(
+    `/activites/${encodeURIComponent(codeActivite)}/couples/${coupleId}/mots-cles`,
+    { motsCles },
+    signal,
+  );
+}
+
+/**
  * L'autre issue à une incohérence : détacher cette rédaction vers un nouveau code du même
  * halo (`I.02.08.01` -> `I.02.08.24`), au lieu de l'imposer aux autres métiers.
  */

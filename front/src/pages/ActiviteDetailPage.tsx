@@ -6,6 +6,7 @@ import { useFetch } from '@/hooks/useFetch';
 import { Loader } from '@/components/Loader';
 import { ErrorMessage } from '@/components/ErrorMessage';
 import { EditeurConnaissances } from '@/components/EditeurConnaissances';
+import { EditeurMotsCles } from '@/components/EditeurMotsCles';
 import {
   FormulaireRedaction,
   redactionDepuis,
@@ -39,6 +40,8 @@ export function ActiviteDetailPage() {
   const [redaction, setRedaction] = useState<Redaction | null>(null);
   /** Couple dont on édite les domaines de connaissance. */
   const [dcCoupleId, setDcCoupleId] = useState<number | null>(null);
+  /** Couple dont on édite les mots-clés. */
+  const [mcCoupleId, setMcCoupleId] = useState<number | null>(null);
   const [enregistrement, setEnregistrement] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
 
@@ -58,6 +61,7 @@ export function ActiviteDetailPage() {
     setEditionId(v.coupleModeleId);
     setRedaction(redactionDepuis(v));
     setDcCoupleId(null);
+    setMcCoupleId(null);
     setErreur(null);
   }
 
@@ -223,17 +227,52 @@ export function ActiviteDetailPage() {
                       {m.intitule} <span className="detail">({m.codeMetier})</span>
                     </Link>
                     <span className="detail">Modifié : {dateModification(m.modifieLe)}</span>
+                    {m.motsCles.length > 0 && (
+                      <ul className="badges">
+                        {m.motsCles.map((mot) => (
+                          <li key={mot} className="badge">
+                            {mot}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                     {dcCoupleId === m.coupleId ? null : (
                       <button
                         type="button"
                         className="lien-discret"
                         onClick={() => {
                           setDcCoupleId(m.coupleId);
+                          setMcCoupleId(null);
                           annuler();
                         }}
                       >
                         Modifier ses domaines
                       </button>
+                    )}
+                    {mcCoupleId === m.coupleId ? null : (
+                      <button
+                        type="button"
+                        className="lien-discret"
+                        onClick={() => {
+                          setMcCoupleId(m.coupleId);
+                          setDcCoupleId(null);
+                          annuler();
+                        }}
+                      >
+                        Modifier ses mots-clés
+                      </button>
+                    )}
+                    {mcCoupleId === m.coupleId && (
+                      <EditeurMotsCles
+                        codeActivite={code}
+                        coupleId={m.coupleId}
+                        motsCles={m.motsCles}
+                        onEnregistre={() => {
+                          setMcCoupleId(null);
+                          setRecharger((n) => n + 1);
+                        }}
+                        onAnnule={() => setMcCoupleId(null)}
+                      />
                     )}
                   </li>
                 ))}

@@ -10,6 +10,7 @@ import {
   CompetenceDetail,
   NiveauMaitrise,
   ActiviteMotCle,
+  MotCle,
   Formacode,
 } from '../models';
 import { HttpError } from '../types/api';
@@ -378,6 +379,100 @@ async function dureeDeReference(
   return ligne?.dureeHeures !== null && ligne?.dureeHeures !== undefined
     ? Number(ligne.dureeHeures)
     : null;
+}
+
+/** Trois mots-clés au maximum dans les classeurs sources ; on laisse une marge pour la saisie manuelle. */
+export const MAX_MOTS_CLES = 10;
+
+/**
+ * Réécrit les mots-clés d'UN couple. Comme les domaines de connaissance, portée limitée à
+ * un couple : deux métiers qui partagent un code activité peuvent avoir des mots-clés
+ * différents (constaté sur le catalogue — voir `incoherence.service.ts`, qui les exclut
+ * volontairement de la comparaison des rédactions).
+ */
+export async function modifierMotsClesCouple(
+  codeActivite: string,
+  coupleId: number,
+  libelles: string[],
+): Promise<string[]> {
+  const couple = await MetierActivite.findOne({ where: { id: coupleId, codeActivite } });
+  if (!couple) throw HttpError.notFound(`Couple ${coupleId} sur l’activité ${codeActivite}`);
+
+  await sequelize.transaction(async (transaction) => {
+    await ecrireMotsCles(coupleId, libelles, transaction);
+  });
+
+  // Pas d'association directe ActiviteMotCle → MotCle (c'est un belongsToMany porté par
+  // MetierActivite) : requête brute plutôt qu'un include à deux niveaux pour ce seul besoin.
+  const lignes = await sequelize.query<{ libelle: string }>(
+    `SELECT mc.libelle
+       FROM activite_mot_cle amc
+       JOIN mot_cle mc ON mc.id = amc.mot_cle_id
+      WHERE amc.metier_activite_id = :coupleId
+      ORDER BY amc.ordre`,
+    { replacements: { coupleId }, type: QueryTypes.SELECT },
+  );
+  return lignes.map((l) => l.libelle);
+}
+
+/**
+ * Écrit le jeu de mots-clés d'un couple dans une transaction en cours — partagé par
+ * l'édition et la création d'un couple (`creerCoupleActivite`, qui recopie ceux du modèle).
+ *
+ * Les libellés sont résolus vers `mot_cle` (créés s'ils n'existent pas encore, dédupliqués
+ * globalement par leur contrainte `UNIQUE`), et les lignes `mot_cle` devenues orphelines
+ * après retrait sont purgées — même logique que l'import général du classeur
+ * (`services/classeur/import.service.ts`), qui ne définit pas cette table comme un
+ * référentiel à part mais comme une simple reconstitution des libellés employés.
+ */
+async function ecrireMotsCles(
+  coupleId: number,
+  libellesBruts: string[],
+  transaction: Transaction,
+): Promise<void> {
+  const libelles = libellesBruts.map((l) => l.trim()).filter((l) => l !== '');
+  if (new Set(libelles).size !== libelles.length) {
+    throw HttpError.badRequest('Un même mot-clé est envoyé deux fois');
+  }
+
+  const motsCles = new Map<string, MotCle>();
+  if (libelles.length > 0) {
+    const existants = await MotCle.findAll({ where: { libelle: libelles }, transaction });
+    for (const m of existants) motsCles.set(m.libelle, m);
+
+    const manquants = libelles.filter((l) => !motsCles.has(l));
+    for (const libelle of manquants) {
+      motsCles.set(libelle, await MotCle.create({ libelle }, { transaction }));
+    }
+  }
+
+  const existantes = await ActiviteMotCle.findAll({ where: { metierActiviteId: coupleId }, transaction });
+  const idsAvant = existantes.map((e) => e.motCleId);
+
+  await ActiviteMotCle.destroy({ where: { metierActiviteId: coupleId }, transaction });
+  if (libelles.length > 0) {
+    await ActiviteMotCle.bulkCreate(
+      libelles.map((libelle, index) => ({
+        metierActiviteId: coupleId,
+        motCleId: motsCles.get(libelle)!.id,
+        ordre: index + 1,
+      })),
+      { transaction },
+    );
+  }
+
+  // Un mot-clé retiré ici peut être resté employé par d'autres couples : ne purger que
+  // ceux qu'aucun couple ne cite plus. Requête brute plutôt qu'un `Op` Sequelize pour la
+  // sous-clause NOT EXISTS — même approche que la purge de l'import général du classeur.
+  const idsAPurger = idsAvant.filter((id) => !libelles.some((l) => motsCles.get(l)?.id === id));
+  if (idsAPurger.length > 0) {
+    await sequelize.query(
+      `DELETE FROM mot_cle
+        WHERE id IN (:ids)
+          AND NOT EXISTS (SELECT 1 FROM activite_mot_cle amc WHERE amc.mot_cle_id = mot_cle.id)`,
+      { replacements: { ids: idsAPurger }, type: QueryTypes.DELETE, transaction },
+    );
+  }
 }
 
 /**

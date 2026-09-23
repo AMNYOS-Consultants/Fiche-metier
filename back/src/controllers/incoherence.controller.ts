@@ -8,7 +8,7 @@ import {
   scinderVariante,
   modifierRedactionVariante,
 } from '../services/incoherence.service';
-import { modifierConnaissancesCouple } from '../services/couple.service';
+import { modifierConnaissancesCouple, modifierMotsClesCouple, MAX_MOTS_CLES } from '../services/couple.service';
 
 /** GET /api/activites/incoherences */
 export async function lister(_req: Request, res: Response): Promise<void> {
@@ -96,6 +96,29 @@ export async function modifierConnaissances(
 
   const { connaissances } = schemaConnaissances.parse(req.body);
   const apres = await modifierConnaissancesCouple(req.params.codeActivite, coupleId, connaissances);
+  res.json({ data: apres });
+}
+
+const schemaMotsCles = z.object({
+  motsCles: z.array(z.string().trim().min(1).max(150)).max(MAX_MOTS_CLES),
+});
+
+/**
+ * PUT /api/activites/:codeActivite/couples/:id/mots-cles — les mots-clés d'un couple.
+ * Même portée qu'un domaine de connaissance : un seul couple, pas toute la variante — voir
+ * couple.service.ts.
+ */
+export async function modifierMotsCles(
+  req: Request<{ codeActivite: string; id: string }>,
+  res: Response,
+): Promise<void> {
+  const coupleId = Number(req.params.id);
+  if (!Number.isInteger(coupleId) || coupleId <= 0) {
+    throw HttpError.badRequest('Identifiant de couple invalide');
+  }
+
+  const { motsCles } = schemaMotsCles.parse(req.body);
+  const apres = await modifierMotsClesCouple(req.params.codeActivite, coupleId, motsCles);
   res.json({ data: apres });
 }
 
